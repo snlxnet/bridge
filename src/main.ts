@@ -22,15 +22,13 @@ export default class Bridge extends Plugin {
 			}
 		});
 
-		/*
 		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
+			id: 'add-uuid',
+			name: 'Add a UUID to the note',
+			editorCallback: (editor: Editor, _view: MarkdownView) => {
+				editor.replaceRange(`uuid: ${crypto.randomUUID()}\n`, {line: 1, ch: 0}, {line: 1, ch: 0})
 			}
 		});
-		*/
 		
 		this.addSettingTab(new SettingTab(this.app, this));
 	}
