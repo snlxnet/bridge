@@ -1,4 +1,4 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin, Setting} from 'obsidian';
+import {App, Editor, MarkdownView, Modal, Notice, Plugin, Setting, TFile} from 'obsidian';
 import {DEFAULT_SETTINGS, MyPluginSettings as BridgeSettings, SampleSettingTab as SettingTab} from "./settings";
 
 export default class Bridge extends Plugin {
@@ -10,9 +10,44 @@ export default class Bridge extends Plugin {
 		this.addCommand({
 			id: 'publish-garden',
 			name: 'Publish the Garden',
-			callback: () => {
-				// const files = this.app.vault.getMarkdownFiles()
-					// .map(file => this.app.fileManager.processFrontMatter(file))
+			callback: async () => {
+				const now = new Date()
+				const today = now.toISOString().split('T')[0] || "1970-01-01"
+
+				const notes = {
+					pub: [] as TFile[],
+					secret: [] as TFile[],
+					secretNames: [] as string[],
+				}
+
+				await Promise.all(this.app.vault.getMarkdownFiles().map(async (file) => {
+					this.app.fileManager.processFrontMatter(file, async (frontmatter) => {
+						const postTag = frontmatter['post'] as string || ""
+						const uuid = frontmatter['uuid'] as string || ""
+
+						if (postTag.contains("snlx.net")) {
+							notes.pub.push(file)
+						} else if (postTag) {
+							frontmatter['uuid'] = crypto.randomUUID()
+							delete frontmatter['post']
+							notes.secret.push(file)
+							notes.secretNames.push(file.name)
+						} else if (uuid) {
+							notes.secret.push(file)
+							notes.secretNames.push(file.name)
+						} else {
+							return
+						}
+
+						frontmatter['updated'] = today
+						if (frontmatter['layout']) {
+							return
+						} else {
+							frontmatter['layout'] = 'base.njk'
+						}
+					})
+				}))
+
 				new Notice('Not yet Implemented')
 			}
 		});
