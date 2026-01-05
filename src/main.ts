@@ -1,33 +1,28 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import {App, Editor, MarkdownView, Modal, Notice, Plugin, Setting} from 'obsidian';
+import {DEFAULT_SETTINGS, MyPluginSettings as BridgeSettings, SampleSettingTab as SettingTab} from "./settings";
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class Bridge extends Plugin {
+	settings: BridgeSettings;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
+			id: 'publish-garden',
+			name: 'Publish the Garden',
 			callback: () => {
-				new SampleModal(this.app).open();
+				new Notice('Not yet Implemented')
 			}
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
+		this.addCommand({
+			id: 'set-status',
+			name: 'Set Status',
+			callback: () => {
+				new StatusModal(this.app, this.settings.apiKey).open();
+			}
+		});
+
+		/*
 		this.addCommand({
 			id: 'replace-selected',
 			name: 'Replace selected content',
@@ -35,46 +30,16 @@ export default class MyPlugin extends Plugin {
 				editor.replaceSelection('Sample editor command');
 			}
 		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
+		*/
+		
+		this.addSettingTab(new SettingTab(this.app, this));
 	}
 
 	onunload() {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<BridgeSettings>);
 	}
 
 	async saveSettings() {
@@ -82,18 +47,64 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
+class StatusModal extends Modal {
+	apiKey: string;
+	action?: string = "working on";
+	link?: string;
+	location?: string;
+	duration?: string = "+pomo";
+
+	constructor(app: App, key: string) {
 		super(app);
+		this.apiKey = key;
+		this.link = app.workspace.getActiveViewOfType(MarkdownView)?.file?.name.split('.').slice(0, -1).join('.');
 	}
 
 	onOpen() {
 		let {contentEl} = this;
-		contentEl.setText('Woah!');
+		contentEl.createEl('h1', { text: "Currently..." });
+
+		contentEl.addEventListener("keypress", (event) => {
+			if (event.key === "Enter" && event.ctrlKey) {
+				this.close()
+				this.onSubmit()
+			}
+		})
+
+		new Setting(contentEl).setName("action")
+		.addText(text => text.setValue(this.action || "").onChange(val => this.action = val))
+
+		new Setting(contentEl).setName("link")
+		.addText(text => text.setValue(this.link || "").onChange(val => this.link = val))
+
+		new Setting(contentEl).setName("location")
+		.addText(text => text.onChange(val => this.location = val))
+
+		new Setting(contentEl).setName("duration")
+		.setDesc("`+20` for 20 minutes, `+pomo` to start a pomo, `7:15` until 7:15 AM")
+		.addText(text => text.setValue(this.duration || "").onChange(val => this.location = val))
+
+		new Setting(contentEl).addButton((button) => button.setButtonText("Set status").setCta().onClick(() => {
+			this.close()
+			this.onSubmit()
+		}))
 	}
 
 	onClose() {
 		const {contentEl} = this;
 		contentEl.empty();
+	}
+
+	onSubmit() {
+		const url = `/status?pass=${this.apiKey}` + this.addParam("action", this.action) + this.addParam("link", this.link) + this.addParam("location", this.location) + this.addParam("duration", this.duration)
+		new Notice(url)
+	}
+
+	private addParam(name: string, value: string | undefined) {
+		if (!value) {
+			return ""
+		} else {
+			return "&" + name + "=" + value
+		}
 	}
 }

@@ -1,18 +1,20 @@
 import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+import Bridge from "./main";
 
 export interface MyPluginSettings {
-	mySetting: string;
+	apiKey: string;
+	ghKey: string;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+	apiKey: '',
+	ghKey: '',
 }
 
 export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: Bridge;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: Bridge) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -23,13 +25,22 @@ export class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
+			.setName('snlx.net API key')
+			.setDesc('For the secret notes')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(this.plugin.settings.apiKey)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.apiKey = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('github API key')
+			.setDesc('For the public notes')
+			.addText(text => text
+				.setValue(this.plugin.settings.ghKey)
+				.onChange(async (value) => {
+					this.plugin.settings.ghKey = value;
 					await this.plugin.saveSettings();
 				}));
 	}
