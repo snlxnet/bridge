@@ -1,5 +1,6 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin, Setting, TFile} from 'obsidian';
+import {App, Editor, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, Setting, TFile} from 'obsidian';
 import {DEFAULT_SETTINGS, MyPluginSettings as BridgeSettings, SampleSettingTab as SettingTab} from "./settings";
+import { Octokit } from 'octokit';
 
 export default class Bridge extends Plugin {
 	settings: BridgeSettings;
@@ -93,9 +94,10 @@ export default class Bridge extends Plugin {
 					}
 				})
 
-				console.log({secretNotes, secretAssets, publicNotes, publicAssets})
-
-				new Notice('Not yet Implemented')
+				new Notice('Note processing done')
+				new Notice('Uploading to GitHub')
+				await this.commit(publicNotes, Array.from(publicAssets))
+				new Notice('Public notes uploaded')
 			}
 		});
 		this.addCommand({
@@ -137,6 +139,87 @@ export default class Bridge extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private async commit(files: {name: string, body: string}[], assets: string[]) {
+		const octokit = new Octokit({auth: this.settings.ghKey})
+
+		const lastCommit = await octokit.request(
+			`GET /repos/snlxnet/{repo}/commits/HEAD?cacheBust=${Date.now()}`,
+			{ repo: this.settings.repo },
+		)
+		const lastCommitSha = lastCommit.data.sha;
+		const baseTreeSha = lastCommit.data.commit.tree.sha
+
+		const treePromises = files.map(async (file) => {
+			const blob = await octokit.request(
+				"POST /repos/snlxnet/{repo}/git/blobs",
+				{
+					repo: this.settings.repo,
+					content: file.body,
+					encoding: "utf-8",
+				}
+			)
+
+			return {
+				path: file.name,
+				mode: "100644",
+				type: "blob",
+				sha: blob.data.sha,
+			}
+		})
+
+		const treeAssetPromises = assets.map(async (asset) => {
+			const file = this.app.vault.getFileByPath(asset)!
+			const body = await this.app.vault.readBinary(file)
+			const base64 = Buffer.from(body).toString('base64')
+			console.log(body, base64)
+
+			const blob = await octokit.request(
+				"POST /repos/snlxnet/{repo}/git/blobs",
+				{
+					repo: this.settings.repo,
+					content: base64,
+					encoding: "base64",
+				}
+			)
+
+			return {
+				path: asset,
+				mode: "100644",
+				type: "blob",
+				sha: blob.data.sha,
+			}
+		})
+
+		treePromises.push(...treeAssetPromises)
+		const tree = await Promise.all(treePromises)
+
+		console.log(tree)
+		const newTree = await octokit.request(
+			"POST /repos/snlxnet/{repo}/git/trees",
+			{
+				repo: this.settings.repo,
+				base_tree: baseTreeSha,
+				tree,
+			}
+		)
+		const newCommit = await octokit.request(
+			"POST /repos/snlxnet/{repo}/git/commits",
+			{
+				repo: this.settings.repo,
+				message: "bridge: publish multiple files",
+				tree: newTree.data.sha,
+				parents: [lastCommitSha],
+			}
+		)
+		await octokit.request(
+			"PATCH /repos/snlxnet/{repo}/git/refs/heads/main",
+			{
+				repo: this.settings.repo,
+				sha: newCommit.data.sha,
+			}
+		)
 	}
 }
 

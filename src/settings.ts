@@ -4,11 +4,13 @@ import Bridge from "./main";
 export interface MyPluginSettings {
 	apiKey: string;
 	ghKey: string;
+	repo: string;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
 	apiKey: '',
 	ghKey: '',
+	repo: 'snlx.net',
 }
 
 export class SampleSettingTab extends PluginSettingTab {
@@ -41,6 +43,15 @@ export class SampleSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.ghKey)
 				.onChange(async (value) => {
 					this.plugin.settings.ghKey = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('github repo name')
+			.addText(text => text
+				.setValue(this.plugin.settings.repo)
+				.onChange(async (value) => {
+					this.plugin.settings.repo = value;
 					await this.plugin.saveSettings();
 				}));
 	}
