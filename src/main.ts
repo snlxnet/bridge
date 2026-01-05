@@ -54,24 +54,32 @@ export default class Bridge extends Plugin {
 				)))
 
 				const publicAssets = new Set<string>()
+				const regexes = {
+					wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
+					md: /\[.+]\((.+)\)/gm,
+					wikiImage: /!\[\[(.+?)(?:\|.+)?\]\]/gm,
+					mdImage: /!\[.+]\((.+)\)/gm,
+					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
+					mdNote: /([^!])\[.+?]\((.+)\)/gm,
+				}
 				const publicNotes = await Promise.all(notes.pub.map(async (file) => {
 					const body = await this.app.vault.read(file)
-					const wikilinks = body.matchAll(/!\[\[(.+?)(?:\|.+)?\]\]/gm)
-					const mdlinks = body.matchAll(/!\[.+]\((.+)\)/gm)
+					const wikilinks = body.matchAll(regexes.wikiImage)
+					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
 					links.forEach(link => publicAssets.add(link))
 
 					return {
 						name: file.name,
-						body: body,
+						body: body.replace(regexes.wiki, "[$1](/$1)"),
 					}
 				}))
 
 				const secretAssets = new Set<string>()
 				const secretNotes = await Promise.all(notes.secret.map(async (file) => {
 					const body = await this.app.vault.read(file)
-					const wikilinks = body.matchAll(/!\[\[(.+?)(?:\|.+)?\]\]/gm)
-					const mdlinks = body.matchAll(/!\[.+]\((.+)\)/gm)
+					const wikilinks = body.matchAll(regexes.wikiImage)
+					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
 					links.forEach(link => secretAssets.add(link))
 
@@ -82,10 +90,7 @@ export default class Bridge extends Plugin {
 					}
 				}))
 				secretNotes.forEach(note => {
-					const wikilink = /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm
-					const mdlink = /([^!])\[.+?]\((.+)\)/gm
-
-					note.body = note.body.replace(mdlink, replacer).replace(wikilink, replacer)
+					note.body = note.body.replace(regexes.mdNote, replacer).replace(regexes.wikiNote, replacer)
 
 					function replacer(_match: string, prefix: string, name: string) {
 						const uuid = secretNotes.find(note => note.name === name + ".md")?.uuid || name
