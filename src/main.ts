@@ -11,6 +11,8 @@ export default class Bridge extends Plugin {
 			id: 'publish-garden',
 			name: 'Publish the Garden',
 			callback: () => {
+				// const files = this.app.vault.getMarkdownFiles()
+					// .map(file => this.app.fileManager.processFrontMatter(file))
 				new Notice('Not yet Implemented')
 			}
 		});
@@ -25,8 +27,19 @@ export default class Bridge extends Plugin {
 		this.addCommand({
 			id: 'add-uuid',
 			name: 'Add a UUID to the note',
-			editorCallback: (editor: Editor, _view: MarkdownView) => {
-				editor.replaceRange(`uuid: ${crypto.randomUUID()}\n`, {line: 1, ch: 0}, {line: 1, ch: 0})
+			editorCallback: (_editor: Editor, view: MarkdownView) => {
+				if (!view.file) {
+					new Notice("No files are open")
+					return
+				}
+
+				this.app.fileManager.processFrontMatter(view.file, (frontmatter) => {
+					if (frontmatter['uuid']) {
+						new Notice("Already has a UUID")
+						return
+					}
+					frontmatter['uuid'] = crypto.randomUUID()
+				})
 			}
 		});
 		
