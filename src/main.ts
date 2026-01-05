@@ -17,7 +17,7 @@ export default class Bridge extends Plugin {
 				const notes = {
 					pub: [] as TFile[],
 					secret: [] as TFile[],
-					secretNames: [] as string[],
+					secretIds: [] as {name: string, uuid: string}[],
 				}
 
 				await Promise.all(this.app.vault.getMarkdownFiles().map(async (file) => {
@@ -31,14 +31,18 @@ export default class Bridge extends Plugin {
 							frontmatter['uuid'] = crypto.randomUUID()
 							delete frontmatter['post']
 							notes.secret.push(file)
-							notes.secretNames.push(file.name)
+							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else if (uuid) {
 							notes.secret.push(file)
-							notes.secretNames.push(file.name)
+							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else {
 							return
 						}
 
+						if (!frontmatter['created']) {
+							const created = new Date(file.stat.ctime)
+							frontmatter['created'] = created.toISOString().split('T')[0]
+						}
 						frontmatter['updated'] = today
 						if (frontmatter['layout']) {
 							return
@@ -47,6 +51,53 @@ export default class Bridge extends Plugin {
 						}
 					})
 				}))
+
+				// This will bite me at some point
+				new Notice('Waiting for all notes to be processed')
+				await new Promise((resolve) => setTimeout(resolve, 500))
+
+				const publicAssets = new Set<string>()
+				const publicNotes = await Promise.all(notes.pub.map(async (file) => {
+					const body = await this.app.vault.read(file)
+					const wikilinks = body.matchAll(/!\[\[(.+?)(?:\|.+)?\]\]/gm)
+					const mdlinks = body.matchAll(/!\[.+]\((.+)\)/gm)
+					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
+					links.forEach(link => publicAssets.add(link))
+
+					return {
+						name: file.name,
+						body: body,
+					}
+				}))
+
+				const secretAssets = new Set<string>()
+				const secretNotes = await Promise.all(notes.secret.map(async (file) => {
+					const body = await this.app.vault.read(file)
+					const wikilinks = body.matchAll(/!\[\[(.+?)(?:\|.+)?\]\]/gm)
+					const mdlinks = body.matchAll(/!\[.+]\((.+)\)/gm)
+					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
+					links.forEach(link => secretAssets.add(link))
+
+					return {
+						name: file.name,
+						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid,
+						body: body,
+					}
+				}))
+				secretNotes.forEach(note => {
+					const wikilink = /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm
+					const mdlink = /([^!])\[.+?]\((.+)\)/gm
+
+					note.body = note.body.replace(mdlink, replacer).replace(wikilink, replacer)
+
+					function replacer(_match: string, prefix: string, name: string) {
+						const uuid = secretNotes.find(note => note.name === name + ".md")?.uuid || name
+
+						return `${prefix}[${name}](/secure?id=${uuid})`
+					}
+				})
+
+				console.log({secretNotes, secretAssets, publicNotes, publicAssets})
 
 				new Notice('Not yet Implemented')
 			}
