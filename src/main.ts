@@ -20,7 +20,7 @@ export default class Bridge extends Plugin {
 					secretIds: [] as {name: string, uuid: string}[],
 				}
 
-				await Promise.all(this.app.vault.getMarkdownFiles().map(async (file) => {
+				await Promise.all(this.app.vault.getMarkdownFiles().map(async (file) => (
 					this.app.fileManager.processFrontMatter(file, async (frontmatter) => {
 						const postTag = frontmatter['post'] as string || ""
 						const uuid = frontmatter['uuid'] as string || ""
@@ -50,11 +50,7 @@ export default class Bridge extends Plugin {
 							frontmatter['layout'] = 'base.njk'
 						}
 					})
-				}))
-
-				// This will bite me at some point
-				new Notice('Waiting for all notes to be processed')
-				await new Promise((resolve) => setTimeout(resolve, 500))
+				)))
 
 				const publicAssets = new Set<string>()
 				const publicNotes = await Promise.all(notes.pub.map(async (file) => {
