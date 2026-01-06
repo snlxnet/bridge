@@ -12,6 +12,7 @@ export default class Bridge extends Plugin {
 			id: 'publish-garden',
 			name: 'Publish the Garden',
 			callback: async () => {
+				console.log("Publishing...")
 				const now = new Date()
 				const today = now.toISOString().split('T')[0] || "1970-01-01"
 
@@ -53,7 +54,8 @@ export default class Bridge extends Plugin {
 					})
 				)))
 
-				const publicAssets = new Set<TFile>()
+				const publicAssetSet = new Set<TFile>()
+				let publicAssets: TFile[] = []
 				const regexes = {
 					wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
 					md: /\[.+]\((.+)\)/gm,
@@ -62,14 +64,14 @@ export default class Bridge extends Plugin {
 					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
 					mdNote: /([^!])\[.+?]\((.+)\)/gm,
 				}
-				const publicNotes = await Promise.all(notes.pub.map(async (file) => {
+				let publicNotes = await Promise.all(notes.pub.map(async (file) => {
 					const body = await this.app.vault.read(file)
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
 					links.forEach(link => {
 						const file = this.app.vault.getFileByPath(link)
-						file && publicAssets.add(file)
+						file && publicAssetSet.add(file)
 					})
 
 					return {
@@ -79,15 +81,16 @@ export default class Bridge extends Plugin {
 					}
 				}))
 
-				const secretAssets = new Set<TFile>()
-				const secretNotes = await Promise.all(notes.secret.map(async (file) => {
+				const secretAssetSet = new Set<TFile>()
+				let secretAssets: TFile[] = []
+				let secretNotes = await Promise.all(notes.secret.map(async (file) => {
 					const body = await this.app.vault.read(file)
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
 					links.forEach(link => {
 						const file = this.app.vault.getFileByPath(link)
-						file && secretAssets.add(file)
+						file && secretAssetSet.add(file)
 					})
 
 					return {
@@ -112,46 +115,54 @@ export default class Bridge extends Plugin {
 					bridgeSys = await this.app.vault.create("bridge-sys.md", "https://github.com/snlxnet/bridge system file")
 				}
 				await this.app.fileManager.processFrontMatter(bridgeSys, async (frontmatter) => {
-					publicNotes.forEach(note => {
+					publicNotes = publicNotes.map(note => {
+						console.log({name: note.name, fm: frontmatter[note.name], up: note.updated})
 						if (frontmatter[note.name] === note.updated) {
 							console.log("♻ unchanged public 📝 " + note.name)
-							publicNotes.remove(note)
+							return null
 						} else {
 							frontmatter[note.name] = note.updated
+							return note
 						}
-					})
-					secretNotes.forEach(note => {
+					}).filter(note => note !== null)
+					secretNotes = secretNotes.map(note => {
 						if (frontmatter[note.name] === note.updated) {
 							console.log("♻ unchanged secret 📝 " + note.name)
-							publicNotes.remove(note)
+							return null
 						} else {
 							frontmatter[note.name] = note.updated
+							return note
 						}
-					})
-					publicAssets.forEach(asset => {
+					}).filter(note => note !== null)
+					publicAssets = Array.from(publicAssetSet).map(asset => {
 						if (frontmatter[asset.name] === asset.stat.mtime) {
 							console.log("♻ unchanged public 🖼️ " + asset.name)
-							publicAssets.delete(asset)
+							return null
 						} else {
 							frontmatter[asset.name] = asset.stat.mtime
+							return asset
 						}
-					})
-					secretAssets.forEach(asset => {
+					}).filter(asset => asset !== null)
+					secretAssets = Array.from(secretAssetSet).map(asset => {
 						if (frontmatter[asset.name] === asset.stat.mtime) {
 							console.log("♻ unchanged secret 🖼️ " + asset.name)
-							secretAssets.delete(asset)
+							return null
 						} else {
 							frontmatter[asset.name] = asset.stat.mtime
+							return asset
 						}
-					})
+					}).filter(asset => asset !== null)
 				})
 
-				console.log({publicNotes, publicAssets})
-				return;
-				new Notice('Note processing done')
-				new Notice('Uploading to GitHub')
-				await this.commit(publicNotes, Array.from(publicAssets))
-				new Notice('Public notes uploaded')
+				const publicNotesMessage = publicNotes.map(note => '- ' + note.name).join('\n') + publicAssets.map(asset => '- ' + asset.name).join('\n')
+				if (publicNotesMessage) {
+					new Notice('Public notes:\n' + publicNotesMessage)
+					new Notice('Uploading to GitHub')
+					await this.commit(publicNotes, publicAssets)
+					new Notice('Public notes uploaded')
+				} else {
+					new Notice('No public notes were updated')
+				}
 			}
 		});
 		this.addCommand({
