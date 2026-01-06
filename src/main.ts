@@ -53,7 +53,7 @@ export default class Bridge extends Plugin {
 					})
 				)))
 
-				const publicAssets = new Set<string>()
+				const publicAssets = new Set<TFile>()
 				const regexes = {
 					wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
 					md: /\[.+]\((.+)\)/gm,
@@ -67,24 +67,32 @@ export default class Bridge extends Plugin {
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
-					links.forEach(link => publicAssets.add(link))
+					links.forEach(link => {
+						const file = this.app.vault.getFileByPath(link)
+						file && publicAssets.add(file)
+					})
 
 					return {
 						name: file.name,
+						updated: file.stat.mtime,
 						body: body.replace(regexes.wiki, "[$1](/$1)"),
 					}
 				}))
 
-				const secretAssets = new Set<string>()
+				const secretAssets = new Set<TFile>()
 				const secretNotes = await Promise.all(notes.secret.map(async (file) => {
 					const body = await this.app.vault.read(file)
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
 					const links = [...wikilinks, ...mdlinks].map(match => match.last()!)
-					links.forEach(link => secretAssets.add(link))
+					links.forEach(link => {
+						const file = this.app.vault.getFileByPath(link)
+						file && secretAssets.add(file)
+					})
 
 					return {
 						name: file.name,
+						updated: file.stat.mtime,
 						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid,
 						body: body,
 					}
@@ -99,6 +107,47 @@ export default class Bridge extends Plugin {
 					}
 				})
 
+				let bridgeSys = this.app.vault.getFileByPath("bridge-sys.md")
+				if (!bridgeSys) {
+					bridgeSys = await this.app.vault.create("bridge-sys.md", "https://github.com/snlxnet/bridge system file")
+				}
+				await this.app.fileManager.processFrontMatter(bridgeSys, async (frontmatter) => {
+					publicNotes.forEach(note => {
+						if (frontmatter[note.name] === note.updated) {
+							console.log("♻ unchanged public 📝 " + note.name)
+							publicNotes.remove(note)
+						} else {
+							frontmatter[note.name] = note.updated
+						}
+					})
+					secretNotes.forEach(note => {
+						if (frontmatter[note.name] === note.updated) {
+							console.log("♻ unchanged secret 📝 " + note.name)
+							publicNotes.remove(note)
+						} else {
+							frontmatter[note.name] = note.updated
+						}
+					})
+					publicAssets.forEach(asset => {
+						if (frontmatter[asset.name] === asset.stat.mtime) {
+							console.log("♻ unchanged public 🖼️ " + asset.name)
+							publicAssets.delete(asset)
+						} else {
+							frontmatter[asset.name] = asset.stat.mtime
+						}
+					})
+					secretAssets.forEach(asset => {
+						if (frontmatter[asset.name] === asset.stat.mtime) {
+							console.log("♻ unchanged secret 🖼️ " + asset.name)
+							secretAssets.delete(asset)
+						} else {
+							frontmatter[asset.name] = asset.stat.mtime
+						}
+					})
+				})
+
+				console.log({publicNotes, publicAssets})
+				return;
 				new Notice('Note processing done')
 				new Notice('Uploading to GitHub')
 				await this.commit(publicNotes, Array.from(publicAssets))
@@ -146,7 +195,7 @@ export default class Bridge extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private async commit(files: {name: string, body: string}[], assets: string[]) {
+	private async commit(files: {name: string, body: string}[], assets: TFile[]) {
 		const octokit = new Octokit({auth: this.settings.ghKey})
 
 		const lastCommit = await octokit.request(
@@ -175,8 +224,7 @@ export default class Bridge extends Plugin {
 		})
 
 		const treeAssetPromises = assets.map(async (asset) => {
-			const file = this.app.vault.getFileByPath(asset)!
-			const body = await this.app.vault.readBinary(file)
+			const body = await this.app.vault.readBinary(asset)
 			const base64 = Buffer.from(body).toString('base64')
 			console.log(body, base64)
 
@@ -190,7 +238,7 @@ export default class Bridge extends Plugin {
 			)
 
 			return {
-				path: asset,
+				path: asset.name,
 				mode: "100644",
 				type: "blob",
 				sha: blob.data.sha,
