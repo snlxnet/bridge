@@ -130,7 +130,9 @@ export default class Bridge extends Plugin {
 						}
 					}).filter(note => note !== null)
 					publicAssets = Array.from(publicAssetSet).map(asset => {
-						if (store[asset.name] === asset.stat.mtime) {
+						const stored = +store[asset.name]
+						const current = asset.stat.mtime
+						if (unixtimeCloseEnough(stored, current)) {
 							console.log("♻ unchanged public 🖼️ " + asset.name)
 							return null
 						} else {
@@ -139,7 +141,9 @@ export default class Bridge extends Plugin {
 						}
 					}).filter(asset => asset !== null)
 					secretAssets = Array.from(secretAssetSet).map(asset => {
-						if (store[asset.name] === asset.stat.mtime) {
+						const stored = +store[asset.name]
+						const current = asset.stat.mtime
+						if (unixtimeCloseEnough(stored, current)) {
 							console.log("♻ unchanged secret 🖼️ " + asset.name)
 							return null
 						} else {
@@ -280,6 +284,12 @@ export default class Bridge extends Plugin {
 			}
 		)
 	}
+}
+
+function unixtimeCloseEnough(a: number, b: number) {
+	const deltaSec = Math.abs(b - a)
+	console.log(a, b, deltaSec)
+	return deltaSec < 15 * 60
 }
 
 class StatusModal extends Modal {
