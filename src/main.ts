@@ -271,7 +271,7 @@ export default class Bridge extends Plugin {
 			"POST /repos/snlxnet/{repo}/git/commits",
 			{
 				repo: this.settings.repo,
-				message: "bridge: publish multiple files",
+				message: "bridge: publish the updates",
 				tree: newTree.data.sha,
 				parents: [lastCommitSha],
 			}
