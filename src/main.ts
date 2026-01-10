@@ -2,6 +2,8 @@ import {App, Editor, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, Set
 import {DEFAULT_SETTINGS, MyPluginSettings as BridgeSettings, SampleSettingTab as SettingTab} from "./settings";
 import { Octokit } from 'octokit';
 
+type FileWithMeta = {file: TFile, updated: string}
+
 export default class Bridge extends Plugin {
 	settings: BridgeSettings;
 
@@ -13,12 +15,10 @@ export default class Bridge extends Plugin {
 			name: 'Publish the Garden',
 			callback: async () => {
 				console.log("Publishing...")
-				const now = new Date()
-				const today = now.toISOString().split('T')[0] || "1970-01-01"
 
 				const notes = {
-					pub: [] as TFile[],
-					secret: [] as TFile[],
+					pub: [] as FileWithMeta[],
+					secret: [] as FileWithMeta[],
 					secretIds: [] as {name: string, uuid: string}[],
 				}
 
@@ -26,26 +26,22 @@ export default class Bridge extends Plugin {
 					this.app.fileManager.processFrontMatter(file, async (frontmatter) => {
 						const postTag = frontmatter['post'] as string || ""
 						const uuid = frontmatter['uuid'] as string || ""
+						const updated = frontmatter['updated'] as string || "1970-01-01"
 
 						if (postTag.contains("snlx.net")) {
-							notes.pub.push(file)
+							notes.pub.push({file, updated})
 						} else if (postTag) {
 							frontmatter['uuid'] = crypto.randomUUID()
 							delete frontmatter['post']
-							notes.secret.push(file)
+							notes.secret.push({file, updated})
 							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else if (uuid) {
-							notes.secret.push(file)
+							notes.secret.push({file, updated})
 							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else {
 							return
 						}
 
-						if (!frontmatter['created']) {
-							const created = new Date(file.stat.ctime)
-							frontmatter['created'] = created.toISOString().split('T')[0]
-						}
-						frontmatter['updated'] = today
 						if (frontmatter['layout']) {
 							return
 						} else {
@@ -64,7 +60,7 @@ export default class Bridge extends Plugin {
 					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
 					mdNote: /([^!])\[.+?]\((.+)\)/gm,
 				}
-				let publicNotes = await Promise.all(notes.pub.map(async (file) => {
+				let publicNotes = await Promise.all(notes.pub.map(async ({file, updated}) => {
 					const body = await this.app.vault.read(file)
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
@@ -76,14 +72,14 @@ export default class Bridge extends Plugin {
 
 					return {
 						name: file.name,
-						updated: file.stat.mtime,
+						updated,
 						body: body.replace(regexes.wiki, "[$1](/$1)"),
 					}
 				}))
 
 				const secretAssetSet = new Set<TFile>()
 				let secretAssets: TFile[] = []
-				let secretNotes = await Promise.all(notes.secret.map(async (file) => {
+				let secretNotes = await Promise.all(notes.secret.map(async ({file, updated}) => {
 					const body = await this.app.vault.read(file)
 					const wikilinks = body.matchAll(regexes.wikiImage)
 					const mdlinks = body.matchAll(regexes.mdImage)
@@ -95,7 +91,7 @@ export default class Bridge extends Plugin {
 
 					return {
 						name: file.name,
-						updated: file.stat.mtime,
+						updated,
 						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid,
 						body: body,
 					}
@@ -114,47 +110,46 @@ export default class Bridge extends Plugin {
 				if (!bridgeSys) {
 					bridgeSys = await this.app.vault.create("bridge-sys.md", "https://github.com/snlxnet/bridge system file")
 				}
-				await this.app.fileManager.processFrontMatter(bridgeSys, async (frontmatter) => {
+				await this.app.fileManager.processFrontMatter(bridgeSys, async (store) => {
 					publicNotes = publicNotes.map(note => {
-						console.log({name: note.name, fm: frontmatter[note.name], up: note.updated})
-						if (frontmatter[note.name] === note.updated) {
+						if (store[note.name] === note.updated) {
 							console.log("♻ unchanged public 📝 " + note.name)
 							return null
 						} else {
-							frontmatter[note.name] = note.updated
+							store[note.name] = note.updated
 							return note
 						}
 					}).filter(note => note !== null)
 					secretNotes = secretNotes.map(note => {
-						if (frontmatter[note.name] === note.updated) {
+						if (store[note.name] === note.updated) {
 							console.log("♻ unchanged secret 📝 " + note.name)
 							return null
 						} else {
-							frontmatter[note.name] = note.updated
+							store[note.name] = note.updated
 							return note
 						}
 					}).filter(note => note !== null)
 					publicAssets = Array.from(publicAssetSet).map(asset => {
-						if (frontmatter[asset.name] === asset.stat.mtime) {
+						if (store[asset.name] === asset.stat.mtime) {
 							console.log("♻ unchanged public 🖼️ " + asset.name)
 							return null
 						} else {
-							frontmatter[asset.name] = asset.stat.mtime
+							store[asset.name] = asset.stat.mtime
 							return asset
 						}
 					}).filter(asset => asset !== null)
 					secretAssets = Array.from(secretAssetSet).map(asset => {
-						if (frontmatter[asset.name] === asset.stat.mtime) {
+						if (store[asset.name] === asset.stat.mtime) {
 							console.log("♻ unchanged secret 🖼️ " + asset.name)
 							return null
 						} else {
-							frontmatter[asset.name] = asset.stat.mtime
+							store[asset.name] = asset.stat.mtime
 							return asset
 						}
 					}).filter(asset => asset !== null)
 				})
 
-				const publicNotesMessage = publicNotes.map(note => '- ' + note.name).join('\n') + publicAssets.map(asset => '- ' + asset.name).join('\n')
+				const publicNotesMessage = [...publicNotes.map(note => '- ' + note.name), ...publicAssets.map(asset => '- ' + asset.name)].join('\n')
 				if (publicNotesMessage) {
 					new Notice('Public notes:\n' + publicNotesMessage)
 					new Notice('Uploading to GitHub')
