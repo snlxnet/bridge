@@ -32,10 +32,12 @@ export default class Bridge extends Plugin {
 							notes.pub.push({file, updated})
 						} else if (postTag) {
 							frontmatter['uuid'] = crypto.randomUUID()
+							frontmatter['name'] = file.name
 							delete frontmatter['post']
 							notes.secret.push({file, updated})
 							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else if (uuid) {
+							frontmatter['name'] = file.name
 							notes.secret.push({file, updated})
 							notes.secretIds.push({name: file.name, uuid: frontmatter['uuid']})
 						} else {
