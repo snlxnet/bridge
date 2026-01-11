@@ -92,7 +92,7 @@ export default class Bridge extends Plugin {
 					return {
 						name: file.name,
 						updated,
-						body: body,
+						body: body.replace(regexes.wiki, "[$1](/$1)"),
 						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid!, // ensured 2 lines down
 					}
 				}))
@@ -101,15 +101,6 @@ export default class Bridge extends Plugin {
 						new Notice("Note without a UUID marked as secret: " + note.name + ", deleting it")
 					}
 					return note.uuid !== undefined
-				})
-				secretNotes.forEach(note => {
-					note.body = note.body.replace(regexes.mdNote, replacer).replace(regexes.wikiNote, replacer)
-
-					function replacer(_match: string, prefix: string, name: string) {
-						const uuid = secretNotes.find(note => note.name === name + ".md")?.uuid || name
-
-						return `${prefix}[${name}](/secret?id=${uuid})`
-					}
 				})
 
 				let bridgeSys = this.app.vault.getFileByPath("bridge-sys.md")
