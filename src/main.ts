@@ -92,17 +92,23 @@ export default class Bridge extends Plugin {
 					return {
 						name: file.name,
 						updated,
-						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid,
 						body: body,
+						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid!, // ensured 2 lines down
 					}
 				}))
+				secretNotes = secretNotes.filter(note => {
+					if (note.uuid === undefined) {
+						new Notice("Note without a UUID marked as secret: " + note.name + ", deleting it")
+					}
+					return note.uuid !== undefined
+				})
 				secretNotes.forEach(note => {
 					note.body = note.body.replace(regexes.mdNote, replacer).replace(regexes.wikiNote, replacer)
 
 					function replacer(_match: string, prefix: string, name: string) {
 						const uuid = secretNotes.find(note => note.name === name + ".md")?.uuid || name
 
-						return `${prefix}[${name}](/secure?id=${uuid})`
+						return `${prefix}[${name}](/secret?id=${uuid})`
 					}
 				})
 
@@ -162,6 +168,15 @@ export default class Bridge extends Plugin {
 				} else {
 					new Notice('No public notes were updated')
 				}
+				const secretNotesMessage = [...secretNotes.map(note => '- ' + note.name), ...secretAssets.map(asset => '- ' + asset.name)].join('\n')
+				if (secretNotesMessage) {
+					new Notice('Secret notes:\n' + secretNotesMessage)
+					new Notice('Uploading to api.snlx.net')
+					await this.uploadSecret(secretNotes, secretAssets).catch(err => new Notice("Failed" + JSON.stringify(err)))
+					new Notice('Secret notes uploaded')
+				} else {
+					new Notice('No secret notes were updated')
+				}
 			}
 		});
 		this.addCommand({
@@ -170,6 +185,12 @@ export default class Bridge extends Plugin {
 			callback: () => {
 				new StatusModal(this.app, this.settings.apiKey).open();
 			}
+		});
+
+		this.addCommand({
+			id: 'upgrade-server',
+			name: 'Upgrade Server',
+			callback: () => this.upgradeServer(),
 		});
 
 		this.addCommand({
@@ -283,6 +304,31 @@ export default class Bridge extends Plugin {
 				sha: newCommit.data.sha,
 			}
 		)
+	}
+
+	private async uploadSecret(files: {name: string, body: string, uuid: string}[], assets: TFile[]) {
+		const filePromises = files.map(file => this.uploadFile(file.uuid, file.body))
+		const assetPromises = assets.map(async (asset) => this.uploadFile(asset.name, await this.app.vault.readBinary(asset)))
+		filePromises.push(...assetPromises)
+		await Promise.all(filePromises)
+	}
+
+	private async uploadFile(name: string, body: string | ArrayBuffer) {
+		const type = typeof body === "string" ? "string" : undefined;
+		const blob = new Blob([body], { type })
+
+	    const formData = new FormData()
+	    formData.append("file", blob)
+		return fetch(`https://api.snlx.net/file?pass=${this.settings.apiKey}&id=${name}`, {
+			method: "POST",
+			body: formData,
+		})
+	}
+
+	private async upgradeServer() {
+		const response = await fetch(`https://api.snlx.net/upgrade?pass=${this.settings.apiKey}`)
+		const body = await response.text()
+		new Notice(`Server responded with ${body}`)
 	}
 }
 
