@@ -56,11 +56,11 @@ export default class Bridge extends Plugin {
 				let publicAssets: TFile[] = []
 				const regexes = {
 					wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
-					md: /\[.+]\((.+)\)/gm,
+					md: /\[.+?]\((.+?)\)/gm,
 					wikiImage: /!\[\[(.+?)(?:\|.+)?\]\]/gm,
-					mdImage: /!\[.+]\((.+)\)/gm,
+					mdImage: /!\[.+?]\((.+?)\)/gm,
 					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
-					mdNote: /([^!])\[.+?]\((.+)\)/gm,
+					mdNote: /([^!])\[.+?]\((.+?)\)/gm,
 				}
 				let publicNotes = await Promise.all(notes.pub.map(async ({file, updated}) => {
 					const body = await this.app.vault.read(file)
