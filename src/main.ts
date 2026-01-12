@@ -94,7 +94,7 @@ export default class Bridge extends Plugin {
 					return {
 						name: file.name,
 						updated,
-						body: body.replace(regexes.wiki, "[$1](/$1)"),
+						body: body.replace(regexes.wikiImage, "![$1](https://api.snlx.net/file?id=$1)").replace(regexes.wiki, "[$1](/$1)"),
 						uuid: notes.secretIds.find(candidate => candidate.name === file.name)?.uuid!, // ensured 2 lines down
 					}
 				}))
