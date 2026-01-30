@@ -1,6 +1,20 @@
-import {App, Editor, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, Setting, TFile} from 'obsidian';
+import {App, Component, Editor, FileSystemAdapter, MarkdownRenderer, MarkdownView, Modal, Notice, Plugin, Setting, TFile} from 'obsidian';
 import {DEFAULT_SETTINGS, MyPluginSettings as BridgeSettings, SampleSettingTab as SettingTab} from "./settings";
 import { Octokit } from 'octokit';
+
+const HTML_TEMPLATE = `<!doctype html>
+<html>
+	<head>
+		<title>bridge wip</title>
+		<link rel="stylesheet" href="https://snlx.net/new.css">
+	</head>
+	<body>
+		CONTENT
+		<!-- TODO router.js -->
+		<!-- TODO include typ.js everywhere so it's downloaded in the bg & cached -->
+	</body>
+</html>
+`
 
 type FileWithMeta = {file: TFile, updated: string}
 
@@ -76,6 +90,7 @@ export default class Bridge extends Plugin {
 						name: file.name,
 						updated,
 						body: body.replace(regexes.wiki, "[$1](/$1)"),
+						html: await this.toHTML(file, body)
 					}
 				}))
 
@@ -211,6 +226,59 @@ export default class Bridge extends Plugin {
 	onunload() {
 	}
 
+	async toHTML(file: TFile, body: string) {
+		const path = file.path
+		const component = new Component()
+		component.load();
+		const renderDiv = createDiv()
+		await MarkdownRenderer.render(this.app, body, renderDiv, path, component)
+		const html = renderDiv.innerHTML
+		component.unload();
+		return this.fillTemplate(path, html)
+	}
+
+	fillTemplate(path: string, withInnerHTML: string) {
+		const root = document.createElement("body")
+		const backLinks: string[] = []
+		const forwardLinks: string[] = []
+
+		const nav = document.createElement("nav")
+		root.appendChild(nav)
+		nav.innerHTML = "<h2>Linked Notes</h2>"
+		const links = document.createElement("ul")
+		nav.appendChild(links)
+		backLinks.map(note => mkLink(note, "back"))
+		mkLink(path, "current")
+		forwardLinks.map(note => mkLink(note, "forward"))
+		const source = document.createElement("a")
+		source.classList.add("source")
+		source.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-github-icon lucide-github"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>Source&nbsp;code'
+		source.href = "https://github.com/snlxnet/snlx.net"
+		nav.appendChild(source)
+
+		function mkLink(note: string, className: string) {
+			const a = document.createElement("a")
+			a.href = "/" + note
+			a.textContent = note
+			const li = document.createElement("li")
+			li.classList.add(className)
+			li.appendChild(a)
+			links.appendChild(li)
+		}
+
+		const main = document.createElement("main")
+		root.appendChild(main)
+		main.innerHTML = withInnerHTML
+		root.querySelectorAll("a").forEach(anchor => {
+			anchor.removeAttribute("target")
+			anchor.removeAttribute("rel")
+		})
+
+		const html = root.innerHTML.replace(/"app:\/\/[^"]+\/(.+?)(\?.+?)?"/gm, '"$1"')
+		root.remove()
+		return HTML_TEMPLATE.replace("CONTENT", html)
+	}
+
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<BridgeSettings>);
 	}
@@ -219,7 +287,7 @@ export default class Bridge extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private async commit(files: {name: string, body: string}[], assets: TFile[]) {
+	private async commit(files: {name: string, body: string, html: string}[], assets: TFile[]) {
 		const octokit = new Octokit({auth: this.settings.ghKey})
 
 		const lastCommit = await octokit.request(
@@ -234,13 +302,13 @@ export default class Bridge extends Plugin {
 				"POST /repos/snlxnet/{repo}/git/blobs",
 				{
 					repo: this.settings.repo,
-					content: file.body,
+					content: file.html,
 					encoding: "utf-8",
 				}
 			)
 
 			return {
-				path: file.name,
+				path: file.name.replace(".md", ".html"),
 				mode: "100644",
 				type: "blob",
 				sha: blob.data.sha,
