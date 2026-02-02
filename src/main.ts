@@ -32,6 +32,15 @@ const HTML_TEMPLATE = `<!doctype html>
 </html>
 `;
 
+const REGEXES = {
+	wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
+	md: /\[.+?]\((.+?)\)/gm,
+	wikiImage: /!\[\[(.+?)(?:\|.+)?\]\]/gm,
+	mdImage: /!\[.+?]\((.+?)\)/gm,
+	wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
+	mdNote: /([^!])\[.+?]\((.+?)\)/gm,
+};
+
 type FileWithMeta = { file: TFile; updated: string; body: string };
 
 export default class Bridge extends Plugin {
@@ -124,74 +133,34 @@ export default class Bridge extends Plugin {
 					}
 				});
 
-				const publicAssetSet = new Set<TFile>();
 				let publicAssets: TFile[] = [];
-				const regexes = {
-					wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
-					md: /\[.+?]\((.+?)\)/gm,
-					wikiImage: /!\[\[(.+?)(?:\|.+)?\]\]/gm,
-					mdImage: /!\[.+?]\((.+?)\)/gm,
-					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
-					mdNote: /([^!])\[.+?]\((.+?)\)/gm,
-				};
-				const linkTree: Set<{ from: TFile; for: TFile }> = new Set();
-				await Promise.all(
-					notes.pub.map(async ({ file: currentFile, body }) => {
-						const wikilinks = body.matchAll(regexes.wikiImage);
-						const mdlinks = body.matchAll(regexes.mdImage);
-						const links = [...wikilinks, ...mdlinks].map(
-							(match) => match.last()!,
-						);
-						links.forEach((link) => {
-							const linkedFile =
-								this.app.vault.getFileByPath(link);
-
-							if (linkedFile?.extension === "md") {
-								linkTree.add({
-									for: linkedFile,
-									from: currentFile,
-								});
-							} else {
-								linkedFile && publicAssetSet.add(linkedFile);
-							}
-						});
-					}),
-				);
+				const { assets: publicAssetSet, linkTree: publicTree } =
+					await this.processNotes(notes.pub);
 				let publicNotes = await Promise.all(
 					notes.pub.map(async ({ file, updated, body }) => {
 						return {
 							name: file.name,
 							updated,
-							body: body.replace(regexes.wiki, "[$1](/$1)"),
+							body: body.replace(REGEXES.wiki, "[$1](/$1)"),
 							html: await this.toHTML(file, body),
 						};
 					}),
 				);
 
-				const secretAssetSet = new Set<TFile>();
 				let secretAssets: TFile[] = [];
+				const { assets: secretAssetSet, linkTree: secretTree } =
+					await this.processNotes(notes.secret);
 				let secretNotes = await Promise.all(
-					notes.secret.map(async ({ file, updated }) => {
-						const body = await this.app.vault.read(file);
-						const wikilinks = body.matchAll(regexes.wikiImage);
-						const mdlinks = body.matchAll(regexes.mdImage);
-						const links = [...wikilinks, ...mdlinks].map(
-							(match) => match.last()!,
-						);
-						links.forEach((link) => {
-							const file = this.app.vault.getFileByPath(link);
-							file && secretAssetSet.add(file);
-						});
-
+					notes.secret.map(async ({ file, updated, body }) => {
 						return {
 							name: file.name,
 							updated,
 							body: body
 								.replace(
-									regexes.wikiImage,
+									REGEXES.wikiImage,
 									"![$1](https://api.snlx.net/file?id=$1)",
 								)
-								.replace(regexes.wiki, "[$1](/$1)"),
+								.replace(REGEXES.wiki, "[$1](/$1)"),
 							uuid: notes.secretIds.find(
 								(candidate) => candidate.name === file.name,
 							)?.uuid!, // ensured 2 lines down
@@ -346,6 +315,35 @@ export default class Bridge extends Plugin {
 	}
 
 	onunload() {}
+
+	async processNotes(pool: FileWithMeta[]) {
+		const assets = new Set<TFile>();
+		const linkTree: Set<{ from: TFile; for: TFile }> = new Set();
+
+		await Promise.all(
+			pool.map(async ({ file: currentFile, body }) => {
+				const wikilinks = body.matchAll(REGEXES.wikiImage);
+				const mdlinks = body.matchAll(REGEXES.mdImage);
+				const links = [...wikilinks, ...mdlinks].map(
+					(match) => match.last()!,
+				);
+				links.forEach((link) => {
+					const linkedFile = this.app.vault.getFileByPath(link);
+
+					if (linkedFile?.extension === "md") {
+						linkTree.add({
+							for: linkedFile,
+							from: currentFile,
+						});
+					} else {
+						linkedFile && assets.add(linkedFile);
+					}
+				});
+			}),
+		);
+
+		return { assets, linkTree };
+	}
 
 	async toHTML(file: TFile, body: string) {
 		const path = file.path;
