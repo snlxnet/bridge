@@ -2,7 +2,6 @@ import {
 	App,
 	Component,
 	Editor,
-	FileSystemAdapter,
 	MarkdownRenderer,
 	MarkdownView,
 	Modal,
@@ -17,6 +16,7 @@ import {
 	SampleSettingTab as SettingTab,
 } from "./settings";
 import { Octokit } from "octokit";
+import beautify from "js-beautify";
 
 const HTML_TEMPLATE = `<!doctype html>
 <html>
@@ -439,7 +439,7 @@ export default class Bridge extends Plugin {
 			'"$1"',
 		);
 		root.remove();
-		return HTML_TEMPLATE.replace("CONTENT", html);
+		return beautify.html(HTML_TEMPLATE.replace("CONTENT", html));
 	}
 
 	async loadSettings() {
