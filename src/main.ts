@@ -60,6 +60,7 @@ export default class Bridge extends Plugin {
 					pub: [] as FileWithMeta[],
 					secret: [] as FileWithMeta[],
 					secretIds: [] as { name: string; uuid: string }[],
+					private: [] as string[],
 				};
 
 				await Promise.all(
@@ -99,6 +100,7 @@ export default class Bridge extends Plugin {
 										"skipping private note",
 										file.name,
 									);
+									notes.private.push(file.path);
 									return;
 								}
 
@@ -135,8 +137,31 @@ export default class Bridge extends Plugin {
 				});
 
 				let publicAssets: TFile[] = [];
+				let secretAssets: TFile[] = [];
+
 				const { assets: publicAssetSet, linkTree: publicTree } =
 					await this.processNotes(notes.pub);
+				const { assets: secretAssetSet, linkTree: secretTree } =
+					await this.processNotes(notes.secret);
+
+				publicTree.forEach((entry) => {
+					console.log(entry, notes.private);
+					if (
+						notes.private.contains(entry.for.path) ||
+						notes.private.contains(entry.from.path)
+					) {
+						publicTree.delete(entry);
+					}
+				});
+				secretTree.forEach((entry) => {
+					if (
+						notes.private.contains(entry.for.path) ||
+						notes.private.contains(entry.from.path)
+					) {
+						secretTree.delete(entry);
+					}
+				});
+
 				let publicNotes = await Promise.all(
 					notes.pub.map(async ({ file, updated, body }) => {
 						return {
@@ -148,9 +173,6 @@ export default class Bridge extends Plugin {
 					}),
 				);
 
-				let secretAssets: TFile[] = [];
-				const { assets: secretAssetSet, linkTree: secretTree } =
-					await this.processNotes(notes.secret);
 				let secretNotes = await Promise.all(
 					notes.secret.map(async ({ file, updated, body }) => {
 						return {
