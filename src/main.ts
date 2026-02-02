@@ -42,6 +42,7 @@ const REGEXES = {
 };
 
 type FileWithMeta = { file: TFile; updated: string; body: string };
+type LinkTreeEntry = { from: TFile; for: TFile };
 
 export default class Bridge extends Plugin {
 	settings: BridgeSettings;
@@ -142,7 +143,7 @@ export default class Bridge extends Plugin {
 							name: file.name,
 							updated,
 							body: body.replace(REGEXES.wiki, "[$1](/$1)"),
-							html: await this.toHTML(file, body),
+							html: await this.toHTML(file, body, publicTree),
 						};
 					}),
 				);
@@ -318,17 +319,19 @@ export default class Bridge extends Plugin {
 
 	async processNotes(pool: FileWithMeta[]) {
 		const assets = new Set<TFile>();
-		const linkTree: Set<{ from: TFile; for: TFile }> = new Set();
+		const linkTree: Set<LinkTreeEntry> = new Set();
 
 		await Promise.all(
 			pool.map(async ({ file: currentFile, body }) => {
-				const wikilinks = body.matchAll(REGEXES.wikiImage);
-				const mdlinks = body.matchAll(REGEXES.mdImage);
+				const wikilinks = body.matchAll(REGEXES.wiki);
+				const mdlinks = body.matchAll(REGEXES.md);
 				const links = [...wikilinks, ...mdlinks].map(
 					(match) => match.last()!,
 				);
 				links.forEach((link) => {
-					const linkedFile = this.app.vault.getFileByPath(link);
+					const linkedFile =
+						this.app.vault.getFileByPath(link) ||
+						this.app.vault.getFileByPath(link + ".md");
 
 					if (linkedFile?.extension === "md") {
 						linkTree.add({
@@ -345,7 +348,7 @@ export default class Bridge extends Plugin {
 		return { assets, linkTree };
 	}
 
-	async toHTML(file: TFile, body: string) {
+	async toHTML(file: TFile, body: string, linkTree: Set<LinkTreeEntry>) {
 		const path = file.path;
 		const component = new Component();
 		component.load();
@@ -359,13 +362,22 @@ export default class Bridge extends Plugin {
 		);
 		const html = renderDiv.innerHTML;
 		component.unload();
-		return this.fillTemplate(path, html);
+		return this.fillTemplate(path, html, Array.from(linkTree));
 	}
 
-	fillTemplate(path: string, withInnerHTML: string) {
+	fillTemplate(
+		path: string,
+		withInnerHTML: string,
+		linkTree: LinkTreeEntry[],
+	) {
 		const root = document.createElement("body");
-		const backLinks: string[] = [];
-		const forwardLinks: string[] = [];
+		console.log({ linkTree, path });
+		const backLinks: string[] = linkTree
+			.filter((entry) => entry.for.path === path)
+			.map((entry) => entry.from.basename);
+		const forwardLinks: string[] = linkTree
+			.filter((entry) => entry.from.path === path)
+			.map((entry) => entry.for.basename);
 
 		const nav = document.createElement("nav");
 		root.appendChild(nav);
