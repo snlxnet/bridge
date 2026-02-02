@@ -32,7 +32,7 @@ const HTML_TEMPLATE = `<!doctype html>
 </html>
 `;
 
-type FileWithMeta = { file: TFile; updated: string };
+type FileWithMeta = { file: TFile; updated: string; body: string };
 
 export default class Bridge extends Plugin {
 	settings: BridgeSettings;
@@ -64,26 +64,31 @@ export default class Bridge extends Plugin {
 								const updated =
 									(frontmatter["updated"] as string) ||
 									"1970-01-01";
+								const body = await this.app.vault.read(file);
 
 								if (postTag.contains("snlx.net")) {
-									notes.pub.push({ file, updated });
+									notes.pub.push({ file, updated, body });
 								} else if (postTag) {
 									frontmatter["uuid"] = crypto.randomUUID();
 									frontmatter["name"] = file.name;
 									delete frontmatter["post"];
-									notes.secret.push({ file, updated });
+									notes.secret.push({ file, updated, body });
 									notes.secretIds.push({
 										name: file.name,
 										uuid: frontmatter["uuid"],
 									});
 								} else if (uuid) {
 									frontmatter["name"] = file.name;
-									notes.secret.push({ file, updated });
+									notes.secret.push({ file, updated, body });
 									notes.secretIds.push({
 										name: file.name,
 										uuid: frontmatter["uuid"],
 									});
 								} else {
+									console.log(
+										"skipping private note",
+										file.name,
+									);
 									return;
 								}
 
@@ -97,6 +102,28 @@ export default class Bridge extends Plugin {
 					),
 				);
 
+				await new Promise((resolve) => {
+					let pub = 0;
+					let secret = 0;
+					check();
+
+					function check() {
+						if (
+							pub > 0 &&
+							secret > 0 &&
+							pub === notes.pub.length &&
+							secret === notes.secret.length
+						) {
+							resolve("ok");
+							return;
+						}
+						pub = notes.pub.length;
+						secret = notes.secret.length;
+						console.log("Not all notes processed yet, waiting");
+						setTimeout(check, 100);
+					}
+				});
+
 				const publicAssetSet = new Set<TFile>();
 				let publicAssets: TFile[] = [];
 				const regexes = {
@@ -107,19 +134,31 @@ export default class Bridge extends Plugin {
 					wikiNote: /([^!])\[\[(.+?)(?:\|.+)?\]\]/gm,
 					mdNote: /([^!])\[.+?]\((.+?)\)/gm,
 				};
-				let publicNotes = await Promise.all(
-					notes.pub.map(async ({ file, updated }) => {
-						const body = await this.app.vault.read(file);
+				const linkTree: Set<{ from: TFile; for: TFile }> = new Set();
+				await Promise.all(
+					notes.pub.map(async ({ file: currentFile, body }) => {
 						const wikilinks = body.matchAll(regexes.wikiImage);
 						const mdlinks = body.matchAll(regexes.mdImage);
 						const links = [...wikilinks, ...mdlinks].map(
 							(match) => match.last()!,
 						);
 						links.forEach((link) => {
-							const file = this.app.vault.getFileByPath(link);
-							file && publicAssetSet.add(file);
-						});
+							const linkedFile =
+								this.app.vault.getFileByPath(link);
 
+							if (linkedFile?.extension === "md") {
+								linkTree.add({
+									for: linkedFile,
+									from: currentFile,
+								});
+							} else {
+								linkedFile && publicAssetSet.add(linkedFile);
+							}
+						});
+					}),
+				);
+				let publicNotes = await Promise.all(
+					notes.pub.map(async ({ file, updated, body }) => {
 						return {
 							name: file.name,
 							updated,
