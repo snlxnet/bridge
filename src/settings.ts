@@ -1,4 +1,4 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import Bridge from "./main";
 
 export interface MyPluginSettings {
@@ -8,10 +8,10 @@ export interface MyPluginSettings {
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
-	apiKey: '',
-	ghKey: '',
-	repo: 'snlx.net',
-}
+	apiKey: "",
+	ghKey: "",
+	repo: "snlx.net",
+};
 
 export class SampleSettingTab extends PluginSettingTab {
 	plugin: Bridge;
@@ -22,37 +22,39 @@ export class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('snlx.net API key')
-			.setDesc('For the secret notes')
-			.addText(text => text
-				.setValue(this.plugin.settings.apiKey)
-				.onChange(async (value) => {
-					this.plugin.settings.apiKey = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("snlx.net API key")
+			.setDesc("For the secret notes")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.apiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.apiKey = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 
 		new Setting(containerEl)
-			.setName('github API key')
-			.setDesc('For the public notes')
-			.addText(text => text
-				.setValue(this.plugin.settings.ghKey)
-				.onChange(async (value) => {
-					this.plugin.settings.ghKey = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("github API key")
+			.setDesc("For the public notes")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.ghKey)
+					.onChange(async (value) => {
+						this.plugin.settings.ghKey = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 
-		new Setting(containerEl)
-			.setName('github repo name')
-			.addText(text => text
-				.setValue(this.plugin.settings.repo)
-				.onChange(async (value) => {
-					this.plugin.settings.repo = value;
-					await this.plugin.saveSettings();
-				}));
+		new Setting(containerEl).setName("github repo name").addText((text) =>
+			text.setValue(this.plugin.settings.repo).onChange(async (value) => {
+				this.plugin.settings.repo = value;
+				await this.plugin.saveSettings();
+			}),
+		);
 	}
 }
