@@ -21,11 +21,16 @@ import beautify from "js-beautify";
 const HTML_TEMPLATE = `<!doctype html>
 <html>
 	<head>
-		<title>bridge wip</title>
+		<title>TITLE</title>
 		<link rel="stylesheet" href="https://snlx.net/new.css">
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="color-scheme" content="light dark">
 	</head>
 	<body>
 		CONTENT
+		<script src="https://snlx.net/mobile.js"></script>
 		<!-- TODO router.js -->
 		<!-- TODO include typ.js everywhere so it's downloaded in the bg & cached -->
 	</body>
@@ -392,6 +397,8 @@ export default class Bridge extends Plugin {
 		withInnerHTML: string,
 		linkTree: LinkTreeEntry[],
 	) {
+		const title = path.replace(/\/|\.md/g, "");
+
 		const root = document.createElement("body");
 		console.log({ linkTree, path });
 		const backLinks: string[] = linkTree
@@ -439,7 +446,9 @@ export default class Bridge extends Plugin {
 			'"$1"',
 		);
 		root.remove();
-		return beautify.html(HTML_TEMPLATE.replace("CONTENT", html));
+		return beautify.html(
+			HTML_TEMPLATE.replace("TITLE", title).replace("CONTENT", html),
+		);
 	}
 
 	async loadSettings() {
