@@ -76,9 +76,11 @@ const REGEXES = {
 
 type FileWithMeta = {
 	file: TFile;
+	created: string;
 	updated: string;
 	body: string;
 	redirect: string | undefined;
+	tags: string[];
 };
 type LinkTreeEntry = { from: TFile; for: TFile };
 
@@ -110,9 +112,14 @@ export default class Bridge extends Plugin {
 									(frontmatter["post"] as string) || "";
 								const uuid =
 									(frontmatter["uuid"] as string) || "";
+								const created =
+									(frontmatter["created"] as string) ||
+									"1970-01-01";
 								const updated =
 									(frontmatter["updated"] as string) ||
 									"1970-01-01";
+								const tags =
+									(frontmatter["tags"] as string[]) || [];
 								const redirect = frontmatter["redirect"] as
 									| string
 									| undefined;
@@ -121,7 +128,9 @@ export default class Bridge extends Plugin {
 								if (postTag.contains("snlx.net")) {
 									notes.pub.push({
 										file,
+										created,
 										updated,
+										tags,
 										body,
 										redirect,
 									});
@@ -131,7 +140,9 @@ export default class Bridge extends Plugin {
 									delete frontmatter["post"];
 									notes.secret.push({
 										file,
+										created,
 										updated,
+										tags,
 										body,
 										redirect,
 									});
@@ -143,7 +154,9 @@ export default class Bridge extends Plugin {
 									frontmatter["name"] = file.name;
 									notes.secret.push({
 										file,
+										created,
 										updated,
+										tags,
 										body,
 										redirect,
 									});
