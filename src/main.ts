@@ -18,6 +18,34 @@ import {
 import { Octokit } from "octokit";
 import beautify from "js-beautify";
 
+const REDIRECT_TEMPLATE = `<!doctype html>
+<html>
+	<head>
+		<title>TITLE</title>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="color-scheme" content="light dark">
+		<style>
+		  body {
+		    background: #1e1e2e;
+		    color: #fab387;
+		    font-family: monospace;
+		  }
+		  code {
+		    color: transparent;
+		  }
+		</style>
+	</head>
+	<body>
+		<h1>⚙ Redirecting, please wait...</h1>
+		<script>
+		  window.location.href = "LINK"
+		</script>
+	</body>
+</html>
+`;
+
 const HTML_TEMPLATE = `<!doctype html>
 <html>
 	<head>
@@ -46,7 +74,12 @@ const REGEXES = {
 	mdNote: /([^!])\[.+?]\((.+?)\)/gm,
 };
 
-type FileWithMeta = { file: TFile; updated: string; body: string };
+type FileWithMeta = {
+	file: TFile;
+	updated: string;
+	body: string;
+	redirect: string | undefined;
+};
 type LinkTreeEntry = { from: TFile; for: TFile };
 
 export default class Bridge extends Plugin {
@@ -80,22 +113,40 @@ export default class Bridge extends Plugin {
 								const updated =
 									(frontmatter["updated"] as string) ||
 									"1970-01-01";
+								const redirect = frontmatter["redirect"] as
+									| string
+									| undefined;
 								const body = await this.app.vault.read(file);
 
 								if (postTag.contains("snlx.net")) {
-									notes.pub.push({ file, updated, body });
+									notes.pub.push({
+										file,
+										updated,
+										body,
+										redirect,
+									});
 								} else if (postTag) {
 									frontmatter["uuid"] = crypto.randomUUID();
 									frontmatter["name"] = file.name;
 									delete frontmatter["post"];
-									notes.secret.push({ file, updated, body });
+									notes.secret.push({
+										file,
+										updated,
+										body,
+										redirect,
+									});
 									notes.secretIds.push({
 										name: file.name,
 										uuid: frontmatter["uuid"],
 									});
 								} else if (uuid) {
 									frontmatter["name"] = file.name;
-									notes.secret.push({ file, updated, body });
+									notes.secret.push({
+										file,
+										updated,
+										body,
+										redirect,
+									});
 									notes.secretIds.push({
 										name: file.name,
 										uuid: frontmatter["uuid"],
@@ -168,12 +219,17 @@ export default class Bridge extends Plugin {
 				});
 
 				let publicNotes = await Promise.all(
-					notes.pub.map(async ({ file, updated, body }) => {
+					notes.pub.map(async ({ file, updated, body, redirect }) => {
+						const html = redirect
+							? REDIRECT_TEMPLATE.replace("LINK", redirect)
+							: await this.toHTML(file, body, publicTree);
+
 						return {
 							name: file.name,
 							updated,
 							body: body.replace(REGEXES.wiki, "[$1](/$1)"),
-							html: await this.toHTML(file, body, publicTree),
+							html,
+							redirect,
 						};
 					}),
 				);
