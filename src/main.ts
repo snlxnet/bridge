@@ -232,17 +232,17 @@ export default class Bridge extends Plugin {
 				});
 
 				let publicNotes = await Promise.all(
-					notes.pub.map(async ({ file, updated, body, redirect }) => {
-						const html = redirect
-							? REDIRECT_TEMPLATE.replace("LINK", redirect)
-							: await this.toHTML(file, body, publicTree);
+					notes.pub.map(async (note) => {
+						const html = note.redirect
+							? REDIRECT_TEMPLATE.replace("LINK", note.redirect)
+							: await this.toHTML(note, publicTree);
 
 						return {
-							name: file.name,
-							updated,
-							body: body.replace(REGEXES.wiki, "[$1](/$1)"),
+							name: note.file.name,
+							updated: note.updated,
+							body: note.body.replace(REGEXES.wiki, "[$1](/$1)"),
 							html,
-							redirect,
+							redirect: note.redirect,
 						};
 					}),
 				);
@@ -444,37 +444,35 @@ export default class Bridge extends Plugin {
 		return { assets, linkTree };
 	}
 
-	async toHTML(file: TFile, body: string, linkTree: Set<LinkTreeEntry>) {
-		const path = file.path;
+	async toHTML(note: FileWithMeta, linkTree: Set<LinkTreeEntry>) {
 		const component = new Component();
 		component.load();
 		const renderDiv = createDiv();
 		await MarkdownRenderer.render(
 			this.app,
-			body,
+			note.body,
 			renderDiv,
-			path,
+			note.file.path,
 			component,
 		);
 		const html = renderDiv.innerHTML;
 		component.unload();
-		return this.fillTemplate(path, html, Array.from(linkTree));
+		return this.fillTemplate(note, html, Array.from(linkTree));
 	}
 
 	fillTemplate(
-		path: string,
+		note: FileWithMeta,
 		withInnerHTML: string,
 		linkTree: LinkTreeEntry[],
 	) {
-		const title = path.replace(/\/|\.md/g, "");
+		const title = note.file.path.replace(/\/|\.md/g, "");
 
 		const root = document.createElement("body");
-		console.log({ linkTree, path });
 		const backLinks: string[] = linkTree
-			.filter((entry) => entry.for.path === path)
+			.filter((entry) => entry.for.path === note.file.path)
 			.map((entry) => entry.from.basename);
 		const forwardLinks: string[] = linkTree
-			.filter((entry) => entry.from.path === path)
+			.filter((entry) => entry.from.path === note.file.path)
 			.map((entry) => entry.for.basename);
 
 		const nav = document.createElement("nav");
@@ -483,7 +481,7 @@ export default class Bridge extends Plugin {
 		const links = document.createElement("ul");
 		nav.appendChild(links);
 		backLinks.map((note) => mkLink(note, "back"));
-		mkLink(path, "current");
+		mkLink(title, "current");
 		forwardLinks.map((note) => mkLink(note, "forward"));
 		const source = document.createElement("a");
 		source.classList.add("source");
