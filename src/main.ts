@@ -508,6 +508,27 @@ export default class Bridge extends Plugin {
 			anchor.removeAttribute("rel");
 		});
 
+		const meta = document.createElement("div");
+		meta.classList.add("metadata");
+		const createdElement = document.createElement("div");
+		const updatedElement = document.createElement("div");
+		createdElement.innerHTML =
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-feather-icon lucide-feather"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></svg>';
+		createdElement.innerHTML +=
+			"created " + calculateRelativeDate(note.created);
+		updatedElement.innerHTML =
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw-icon lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
+		updatedElement.innerHTML +=
+			"updated " + calculateRelativeDate(note.updated);
+		const tagElements = note.tags.map((text) => {
+			const tag = document.createElement("div");
+			tag.classList.add("tag");
+			tag.textContent = "#" + text;
+			return tag;
+		});
+		meta.append(createdElement, updatedElement, ...tagElements);
+		main.prepend(meta);
+
 		const html = root.innerHTML.replace(
 			/"app:\/\/[^"]+\/(.+?)(\?.+?)?"/gm,
 			'"$1"',
@@ -749,4 +770,19 @@ class StatusModal extends Modal {
 			return "&" + name + "=" + value;
 		}
 	}
+}
+
+function calculateRelativeDate(dateStr: string) {
+	const dateObj = new Date(dateStr);
+	const now = new Date();
+	// @ts-ignore
+	const diffHours = (now - dateObj) / 1000 / 60 / 60;
+	const diffDays = diffHours / 24;
+	if (diffDays > 365) {
+		return (diffDays / 365).toFixed(2) + " yrs ago";
+	}
+	if (diffDays < 1) {
+		return diffHours.toFixed(2) + " hrs ago";
+	}
+	return Math.floor(diffDays) + "d ago";
 }
