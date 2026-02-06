@@ -480,7 +480,7 @@ export default class Bridge extends Plugin {
 			.filter((entry) => !entry.for.path.startsWith("ru-"))
 			.filter((entry) => !entry.from.path.startsWith("ru-"))
 			.map((entry) => entry.for.basename);
-		forwardLinks = [...new Set(backLinks)]
+		forwardLinks = [...new Set(forwardLinks)]
 
 		const nav = document.createElement("nav");
 		root.appendChild(nav);
