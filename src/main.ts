@@ -533,10 +533,11 @@ export default class Bridge extends Plugin {
 			btn.remove(),
 		);
 		root.querySelectorAll("img").forEach(
-			(img) => (img.src = "/" + img.src),
+			(img) => (img.src = img.src.replace("app://obsidian.md", "")),
 		);
 		root.querySelectorAll("a.internal-link").forEach(
-			(link: HTMLAnchorElement) => (link.href = "/" + link.href),
+			(link: HTMLAnchorElement) =>
+				(link.href = link.href.replace("app://obsidian.md", "")),
 		);
 
 		const html = root.innerHTML.replace(
