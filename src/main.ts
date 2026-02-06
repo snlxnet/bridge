@@ -534,11 +534,11 @@ export default class Bridge extends Plugin {
 			btn.remove(),
 		);
 		root.querySelectorAll("img").forEach(
-			(img) => (img.src = "/" + img.src.replace(REGEXES.app, "")),
+			(img) => (img.src = "/" + img.src.replace(REGEXES.app, "$1")),
 		);
 		root.querySelectorAll("a.internal-link").forEach(
 			(link: HTMLAnchorElement) =>
-				(link.href = "/" + link.href.replace(REGEXES.app, "")),
+				(link.href = "/" + link.href.replace(REGEXES.app, "$1")),
 		);
 
 		const html = root.innerHTML.replace(
