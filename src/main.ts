@@ -469,12 +469,18 @@ export default class Bridge extends Plugin {
 		const title = note.file.path.replace(/\/|\.md/g, "");
 
 		const root = document.createElement("body");
-		const backLinks: string[] = linkTree
+		let backLinks = linkTree
 			.filter((entry) => entry.for.path === note.file.path)
+			.filter((entry) => !entry.for.path.startsWith("ru-"))
+			.filter((entry) => !entry.from.path.startsWith("ru-"))
 			.map((entry) => entry.from.basename);
-		const forwardLinks: string[] = linkTree
+		backLinks = [...new Set(backLinks)]
+		let forwardLinks = linkTree
 			.filter((entry) => entry.from.path === note.file.path)
+			.filter((entry) => !entry.for.path.startsWith("ru-"))
+			.filter((entry) => !entry.from.path.startsWith("ru-"))
 			.map((entry) => entry.for.basename);
+		forwardLinks = [...new Set(backLinks)]
 
 		const nav = document.createElement("nav");
 		root.appendChild(nav);
