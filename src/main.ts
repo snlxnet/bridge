@@ -529,6 +529,16 @@ export default class Bridge extends Plugin {
 		meta.append(createdElement, updatedElement, ...tagElements);
 		main.prepend(meta);
 
+		root.querySelectorAll(".copy-code-button").forEach((btn) =>
+			btn.remove(),
+		);
+		root.querySelectorAll("img").forEach(
+			(img) => (img.src = "/" + img.src),
+		);
+		root.querySelectorAll("a.internal-link").forEach(
+			(link: HTMLAnchorElement) => (link.href = "/" + link.href),
+		);
+
 		const html = root.innerHTML.replace(
 			/"app:\/\/[^"]+\/(.+?)(\?.+?)?"/gm,
 			'"$1"',
