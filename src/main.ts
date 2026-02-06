@@ -66,6 +66,7 @@ const HTML_TEMPLATE = `<!doctype html>
 `;
 
 const REGEXES = {
+	app: /app:\/\/.+\/([^?]+)(:?\?.+)?/gm,
 	wiki: /\[\[(.+?)(?:\|.+)?\]\]/gm,
 	md: /\[.+?]\((.+?)\)/gm,
 	wikiImage: /!\[\[(.+?)(?:\|.+)?\]\]/gm,
@@ -533,11 +534,11 @@ export default class Bridge extends Plugin {
 			btn.remove(),
 		);
 		root.querySelectorAll("img").forEach(
-			(img) => (img.src = "/" + img.src.replace("app://obsidian.md/", "")),
+			(img) => (img.src = "/" + img.src.replace(REGEXES.app, "")),
 		);
 		root.querySelectorAll("a.internal-link").forEach(
 			(link: HTMLAnchorElement) =>
-				(link.href = "/" + link.href.replace("app://obsidian.md/", "")),
+				(link.href = "/" + link.href.replace(REGEXES.app, "")),
 		);
 
 		const html = root.innerHTML.replace(
