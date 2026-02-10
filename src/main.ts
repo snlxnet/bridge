@@ -50,7 +50,7 @@ const HTML_TEMPLATE = `<!doctype html>
 <html>
 	<head>
 		<title>TITLE</title>
-		<link rel="stylesheet" href="https://snlx.net/new.css">
+		<link rel="stylesheet" href="/new.css">
 		<meta charset="UTF-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,9 +58,7 @@ const HTML_TEMPLATE = `<!doctype html>
 	</head>
 	<body>
 		CONTENT
-		<script src="https://snlx.net/mobile.js"></script>
-		<!-- TODO router.js -->
-		<!-- TODO include typ.js everywhere so it's downloaded in the bg & cached -->
+		<script type="module" src="/client.js"></script>
 	</body>
 </html>
 `;
@@ -517,22 +515,36 @@ export default class Bridge extends Plugin {
 
 		const meta = document.createElement("div");
 		meta.classList.add("metadata");
-		const createdElement = document.createElement("div");
-		const updatedElement = document.createElement("div");
-		createdElement.innerHTML =
-			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-feather-icon lucide-feather"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></svg>';
-		createdElement.innerHTML +=
-			"created " + calculateRelativeDate(note.created);
-		updatedElement.innerHTML =
-			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw-icon lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
-		updatedElement.innerHTML +=
-			"updated " + calculateRelativeDate(note.updated);
+		const createdElement = mkDate(
+			note.created,
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-feather-icon lucide-feather"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></svg>',
+			"created",
+		);
+		const updatedElement = mkDate(
+			note.updated,
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw-icon lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
+			"updated",
+		);
 		const tagElements = note.tags.map((text) => {
 			const tag = document.createElement("div");
 			tag.classList.add("tag");
 			tag.textContent = "#" + text;
 			return tag;
 		});
+		function mkDate(date: string, icon: string, label: string) {
+			const dateEl = document.createElement("span")
+			dateEl.dataset.date = date;
+			dateEl.textContent = "..."
+			dateEl.classList.add("date")
+
+			const root = document.createElement("div");
+			root.innerHTML = icon;
+			root.appendText(label + " ");
+			root.appendChild(dateEl);
+			root.appendText(" ago");
+
+			return root
+		}
 		meta.append(createdElement, updatedElement, ...tagElements);
 		main.prepend(meta);
 
