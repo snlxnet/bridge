@@ -278,7 +278,7 @@ export default class Bridge extends Plugin {
 								)
 								.map((entry) => entry.from);
 
-							[file, ...forwardAllowed, ...backAllowed].map((file) => {
+							getRelated(file).map((file) => {
 								if (!access[uuid]) {
 									access[uuid] = [file.basename];
 								} else {
@@ -295,6 +295,24 @@ export default class Bridge extends Plugin {
 						},
 					),
 				);
+				
+				// recursively allow all mentioned notes for every UUID
+				function getRelated(note: TFile, exclude: TFile[] = []): TFile[] {
+					const forward = linkTreeArr.filter(link => link.from === note).map(link => link.for)
+					const backward = linkTreeArr.filter(link => link.for === note).map(link => link.from)
+					const related = Array.from(new Set([...forward, ...backward])).filter(file => !exclude.contains(file))
+					if (related.length === 0) {
+						return [note]
+					}
+					const result = related.flatMap(file => getRelated(file, [...exclude, ...related]))
+
+					if (exclude.length === 0) {
+						return [...(new Set(result))]
+					}
+
+					return result
+				}
+				
 				secretNotes = secretNotes.filter((note) => {
 					if (note.uuid === undefined) {
 						new Notice(
@@ -838,19 +856,4 @@ class StatusModal extends Modal {
 			return "&" + name + "=" + value;
 		}
 	}
-}
-
-function calculateRelativeDate(dateStr: string) {
-	const dateObj = new Date(dateStr);
-	const now = new Date();
-	// @ts-ignore
-	const diffHours = (now - dateObj) / 1000 / 60 / 60;
-	const diffDays = diffHours / 24;
-	if (diffDays > 365) {
-		return (diffDays / 365).toFixed(2) + " yrs ago";
-	}
-	if (diffDays < 1) {
-		return diffHours.toFixed(2) + " hrs ago";
-	}
-	return Math.floor(diffDays) + "d ago";
 }
