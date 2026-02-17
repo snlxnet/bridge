@@ -235,6 +235,8 @@ export default class Bridge extends Plugin {
 					}),
 				);
 
+				let linkTreeArr = Array.from(linkTree);
+				let access: Record<string, string[]> = {};
 				let secretNotes = await Promise.all(
 					notes.secret.map(
 						async ({
@@ -262,13 +264,36 @@ export default class Bridge extends Plugin {
 										linkTree,
 									);
 
+							const uuid = notes.secretIds.find(
+								(candidate) => candidate.name === file.name,
+							)?.uuid!;
+							const allowed = linkTreeArr
+								.filter(
+									(entry) => entry.from.path === file.path,
+								)
+								.filter(
+									(entry) =>
+										!entry.for.path.startsWith("ru-"),
+								)
+								.filter(
+									(entry) =>
+										!entry.from.path.startsWith("ru-"),
+								)
+								.map((entry) => entry.for);
+
+							[file, ...allowed].map((file) => {
+								if (!access[uuid]) {
+									access[uuid] = [file.basename];
+								} else {
+									access[uuid].push(file.basename);
+								}
+							});
+
 							return {
 								name: file.name,
 								updated,
 								body: html,
-								uuid: notes.secretIds.find(
-									(candidate) => candidate.name === file.name,
-								)?.uuid!, // ensured 2 lines down
+								uuid,
 							};
 						},
 					),
@@ -372,7 +397,11 @@ export default class Bridge extends Plugin {
 				if (secretNotesMessage) {
 					new Notice("Secret notes:\n" + secretNotesMessage);
 					new Notice("Uploading to api.snlx.net");
-					await this.uploadSecret(secretNotes, secretAssets).catch(
+					await this.uploadSecret(
+						access,
+						secretNotes,
+						secretAssets,
+					).catch(
 						(err) => new Notice("Failed" + JSON.stringify(err)),
 					);
 					new Notice("Secret notes uploaded");
@@ -675,9 +704,13 @@ export default class Bridge extends Plugin {
 	}
 
 	private async uploadSecret(
+		access: Record<string, string[]>,
 		files: { name: string; body: string; uuid: string }[],
 		assets: TFile[],
 	) {
+		const accessJson = JSON.stringify(access, null, 4);
+		await this.uploadFile("access.json", accessJson);
+
 		const filePromises = files.map((file) =>
 			this.uploadFile(file.name.replace(".md", ""), file.body),
 		);
