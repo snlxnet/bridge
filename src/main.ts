@@ -238,6 +238,48 @@ export default class Bridge extends Plugin {
 						};
 					}),
 				);
+				
+				// recursively allow all mentioned notes for every UUID
+				const recursedCache: Record<string, TFile[]> = {}
+				function getRelated(note: TFile, path: TFile[] = []): TFile[] {
+					const isPublic = notes.pub.map(note => note.file).includes(note)
+					if (isPublic) {
+						const last = path.at(-1)
+						return last ? [last] : []
+					}
+
+					if (path.includes(note)) {
+						return [note];
+					}
+					console.log("Recursing", note.basename, path)
+
+					let related = recursedCache[note.path]
+
+					if (!related || !related.length) {
+						const forward = linkTree
+							.filter((link) => link.from === note)
+							.map((link) => link.for);
+						const backward = linkTree
+							.filter((link) => link.for === note)
+							.map((link) => link.from);
+						const relatedSet = new Set([...forward, ...backward].filter(file => !path.includes(file)))
+						related = Array.from(relatedSet)
+						recursedCache[note.path] = related
+					}
+					
+					if (related.length === 0) {
+						return [note];
+					}
+					const result = related.flatMap((file) =>
+						getRelated(file, [...path, note]),
+					);
+
+					if (path.length === 0) {
+						return Array.from(new Set(result));
+					}
+
+					return result;
+				}
 
 				let access: Record<string, string[]> = {};
 				let secretNotes = await Promise.all(
@@ -288,30 +330,6 @@ export default class Bridge extends Plugin {
 						},
 					),
 				);
-
-				// recursively allow all mentioned notes for every UUID
-				function getRelated(note: TFile, depth = 0): TFile[] {
-					console.log("Recursion level", depth);
-					const forward = linkTree
-						.filter((link) => link.from === note)
-						.map((link) => link.for);
-					const backward = linkTree
-						.filter((link) => link.for === note)
-						.map((link) => link.from);
-					const related = [...forward, ...backward];
-					if (related.length === 0 || depth >= 4) {
-						return [note];
-					}
-					const result = related.flatMap((file) =>
-						getRelated(file, depth + 1),
-					);
-
-					if (depth === 0) {
-						return [...new Set(result)];
-					}
-
-					return result;
-				}
 
 				secretNotes = secretNotes.filter((note) => {
 					if (note.uuid === undefined) {
