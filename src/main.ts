@@ -124,6 +124,8 @@ export default class Bridge extends Plugin {
 									| undefined;
 								const body = await this.app.vault.read(file);
 
+								frontmatter["name"] = file.name;
+
 								if (postTag.contains("snlx.net")) {
 									notes.pub.push({
 										file,
@@ -135,7 +137,6 @@ export default class Bridge extends Plugin {
 									});
 								} else if (postTag) {
 									frontmatter["uuid"] = crypto.randomUUID();
-									frontmatter["name"] = file.name;
 									delete frontmatter["post"];
 									notes.secret.push({
 										file,
@@ -150,7 +151,6 @@ export default class Bridge extends Plugin {
 										uuid: frontmatter["uuid"],
 									});
 								} else if (uuid) {
-									frontmatter["name"] = file.name;
 									notes.secret.push({
 										file,
 										created,
@@ -164,10 +164,6 @@ export default class Bridge extends Plugin {
 										uuid: frontmatter["uuid"],
 									});
 								} else {
-									console.log(
-										"skipping private note",
-										file.name,
-									);
 									notes.private.push(file.path);
 									return;
 								}
@@ -207,26 +203,19 @@ export default class Bridge extends Plugin {
 				let publicAssets: TFile[] = [];
 				let secretAssets: TFile[] = [];
 
-				const { assets: publicAssetSet, linkTree: publicTree } =
-					await this.processNotes(notes.pub);
-				const { assets: secretAssetSet, linkTree: secretTree } =
+				const { assets: publicAssetSet } = await this.processNotes(
+					notes.pub,
+				);
+				const { assets: secretAssetSet, linkTree } =
 					await this.processNotes(notes.secret);
 
-				publicTree.forEach((entry) => {
+				linkTree.forEach((entry) => {
 					console.log(entry, notes.private);
 					if (
 						notes.private.contains(entry.for.path) ||
 						notes.private.contains(entry.from.path)
 					) {
-						publicTree.delete(entry);
-					}
-				});
-				secretTree.forEach((entry) => {
-					if (
-						notes.private.contains(entry.for.path) ||
-						notes.private.contains(entry.from.path)
-					) {
-						secretTree.delete(entry);
+						linkTree.delete(entry);
 					}
 				});
 
@@ -234,7 +223,7 @@ export default class Bridge extends Plugin {
 					notes.pub.map(async (note) => {
 						const html = note.redirect
 							? REDIRECT_TEMPLATE.replace("LINK", note.redirect)
-							: await this.toHTML(note, publicTree);
+							: await this.toHTML(note, linkTree);
 
 						return {
 							name: note.file.name,
@@ -247,21 +236,42 @@ export default class Bridge extends Plugin {
 				);
 
 				let secretNotes = await Promise.all(
-					notes.secret.map(async ({ file, updated, body }) => {
-						return {
-							name: file.name,
+					notes.secret.map(
+						async ({
+							file,
 							updated,
-							body: body
-								.replace(
-									REGEXES.wikiImage,
-									"![$1](https://api.snlx.net/file?id=$1)",
-								)
-								.replace(REGEXES.wiki, "[$1](/$1)"),
-							uuid: notes.secretIds.find(
-								(candidate) => candidate.name === file.name,
-							)?.uuid!, // ensured 2 lines down
-						};
-					}),
+							body,
+							created,
+							redirect,
+							tags,
+						}) => {
+							const html = redirect
+								? REDIRECT_TEMPLATE.replace("LINK", redirect)
+								: await this.toHTML(
+										{
+											file,
+											created,
+											updated,
+											tags,
+											body: body.replace(
+												REGEXES.wikiImage,
+												"![$1](https://api.snlx.net/file?id=$1)",
+											),
+											redirect,
+										},
+										linkTree,
+									);
+
+							return {
+								name: file.name,
+								updated,
+								body: html,
+								uuid: notes.secretIds.find(
+									(candidate) => candidate.name === file.name,
+								)?.uuid!, // ensured 2 lines down
+							};
+						},
+					),
 				);
 				secretNotes = secretNotes.filter((note) => {
 					if (note.uuid === undefined) {
@@ -472,13 +482,13 @@ export default class Bridge extends Plugin {
 			.filter((entry) => !entry.for.path.startsWith("ru-"))
 			.filter((entry) => !entry.from.path.startsWith("ru-"))
 			.map((entry) => entry.from.basename);
-		backLinks = [...new Set(backLinks)]
+		backLinks = [...new Set(backLinks)];
 		let forwardLinks = linkTree
 			.filter((entry) => entry.from.path === note.file.path)
 			.filter((entry) => !entry.for.path.startsWith("ru-"))
 			.filter((entry) => !entry.from.path.startsWith("ru-"))
 			.map((entry) => entry.for.basename);
-		forwardLinks = [...new Set(forwardLinks)]
+		forwardLinks = [...new Set(forwardLinks)];
 
 		const nav = document.createElement("nav");
 		root.appendChild(nav);
@@ -532,10 +542,10 @@ export default class Bridge extends Plugin {
 			return tag;
 		});
 		function mkDate(date: string, icon: string, label: string) {
-			const dateEl = document.createElement("span")
+			const dateEl = document.createElement("span");
 			dateEl.dataset.date = date;
-			dateEl.textContent = "..."
-			dateEl.classList.add("date")
+			dateEl.textContent = "...";
+			dateEl.classList.add("date");
 
 			const root = document.createElement("div");
 			root.innerHTML = icon;
@@ -543,7 +553,7 @@ export default class Bridge extends Plugin {
 			root.appendChild(dateEl);
 			root.appendText(" ago");
 
-			return root
+			return root;
 		}
 		meta.append(createdElement, updatedElement, ...tagElements);
 		main.prepend(meta);
@@ -669,7 +679,7 @@ export default class Bridge extends Plugin {
 		assets: TFile[],
 	) {
 		const filePromises = files.map((file) =>
-			this.uploadFile(file.uuid, file.body),
+			this.uploadFile(file.name.replace(".md", ""), file.body),
 		);
 		const assetPromises = assets.map(async (asset) =>
 			this.uploadFile(asset.name, await this.app.vault.readBinary(asset)),
