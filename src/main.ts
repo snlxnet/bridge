@@ -203,21 +203,25 @@ export default class Bridge extends Plugin {
 				let publicAssets: TFile[] = [];
 				let secretAssets: TFile[] = [];
 
-				const { assets: publicAssetSet } = await this.processNotes(
-					notes.pub,
-				);
-				const { assets: secretAssetSet, linkTree } =
+				const { assets: publicAssetSet, linkTree: linkTreePublic } =
+					await this.processNotes(notes.pub);
+				const { assets: secretAssetSet, linkTree: linkTreeSecret } =
 					await this.processNotes(notes.secret);
 
-				linkTree.forEach((entry) => {
+				let linkTreeSet = new Set([
+					...linkTreePublic,
+					...linkTreeSecret,
+				]);
+				linkTreeSet.forEach((entry) => {
 					console.log(entry, notes.private);
 					if (
 						notes.private.contains(entry.for.path) ||
 						notes.private.contains(entry.from.path)
 					) {
-						linkTree.delete(entry);
+						linkTreeSet.delete(entry);
 					}
 				});
+				const linkTree = [...linkTreeSet];
 
 				let publicNotes = await Promise.all(
 					notes.pub.map(async (note) => {
@@ -235,7 +239,6 @@ export default class Bridge extends Plugin {
 					}),
 				);
 
-				let linkTreeArr = Array.from(linkTree);
 				let access: Record<string, string[]> = {};
 				let secretNotes = await Promise.all(
 					notes.secret.map(
@@ -285,24 +288,31 @@ export default class Bridge extends Plugin {
 						},
 					),
 				);
-				
+
 				// recursively allow all mentioned notes for every UUID
-				function getRelated(note: TFile, exclude: TFile[] = []): TFile[] {
-					const forward = linkTreeArr.filter(link => link.from === note).map(link => link.for)
-					const backward = linkTreeArr.filter(link => link.for === note).map(link => link.from)
-					const related = Array.from(new Set([...forward, ...backward])).filter(file => !exclude.contains(file))
-					if (related.length === 0) {
-						return [note]
+				function getRelated(note: TFile, depth = 0): TFile[] {
+					console.log("Recursion level", depth);
+					const forward = linkTree
+						.filter((link) => link.from === note)
+						.map((link) => link.for);
+					const backward = linkTree
+						.filter((link) => link.for === note)
+						.map((link) => link.from);
+					const related = [...forward, ...backward];
+					if (related.length === 0 || depth >= 4) {
+						return [note];
 					}
-					const result = related.flatMap(file => getRelated(file, [...exclude, ...related]))
+					const result = related.flatMap((file) =>
+						getRelated(file, depth + 1),
+					);
 
-					if (exclude.length === 0) {
-						return [...(new Set(result))]
+					if (depth === 0) {
+						return [...new Set(result)];
 					}
 
-					return result
+					return result;
 				}
-				
+
 				secretNotes = secretNotes.filter((note) => {
 					if (note.uuid === undefined) {
 						new Notice(
@@ -314,14 +324,20 @@ export default class Bridge extends Plugin {
 					return note.uuid !== undefined;
 				});
 
-				let accessFile = this.app.vault.getFileByPath("bridge-access.md");
+				let accessFile =
+					this.app.vault.getFileByPath("bridge-access.md");
 				if (!accessFile) {
 					accessFile = await this.app.vault.create(
 						"bridge-access.md",
 						"Just a moment...",
 					);
 				}
-				await this.app.vault.modify(accessFile, "```json\n" + JSON.stringify(access, null, 4) + "\n```\n\nFile create automatically by the bridge plugin")
+				await this.app.vault.modify(
+					accessFile,
+					"```json\n" +
+						JSON.stringify(access, null, 4) +
+						"\n```\n\nFile create automatically by the bridge plugin",
+				);
 
 				let bridgeSys = this.app.vault.getFileByPath("bridge-sys.md");
 				if (!bridgeSys) {
@@ -496,7 +512,7 @@ export default class Bridge extends Plugin {
 		return { assets, linkTree };
 	}
 
-	async toHTML(note: FileWithMeta, linkTree: Set<LinkTreeEntry>) {
+	async toHTML(note: FileWithMeta, linkTree: LinkTreeEntry[]) {
 		const component = new Component();
 		component.load();
 		const renderDiv = createDiv();
@@ -509,7 +525,7 @@ export default class Bridge extends Plugin {
 		);
 		const html = renderDiv.innerHTML;
 		component.unload();
-		return this.fillTemplate(note, html, Array.from(linkTree));
+		return this.fillTemplate(note, html, linkTree);
 	}
 
 	fillTemplate(
