@@ -267,16 +267,6 @@ export default class Bridge extends Plugin {
 							const uuid = notes.secretIds.find(
 								(candidate) => candidate.name === file.name,
 							)?.uuid!;
-							const forwardAllowed = linkTreeArr
-								.filter(
-									(entry) => entry.from.path === file.path,
-								)
-								.map((entry) => entry.for);
-							const backAllowed = linkTreeArr
-								.filter(
-									(entry) => entry.for.path === file.path,
-								)
-								.map((entry) => entry.from);
 
 							getRelated(file).map((file) => {
 								if (!access[uuid]) {
@@ -323,6 +313,15 @@ export default class Bridge extends Plugin {
 					}
 					return note.uuid !== undefined;
 				});
+
+				let accessFile = this.app.vault.getFileByPath("bridge-access.md");
+				if (!accessFile) {
+					accessFile = await this.app.vault.create(
+						"bridge-access.md",
+						"Just a moment...",
+					);
+				}
+				await this.app.vault.modify(accessFile, "```json\n" + JSON.stringify(access, null, 4) + "\n```\n\nFile create automatically by the bridge plugin")
 
 				let bridgeSys = this.app.vault.getFileByPath("bridge-sys.md");
 				if (!bridgeSys) {
