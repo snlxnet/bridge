@@ -590,9 +590,11 @@ export default class Bridge extends Plugin {
 		root.querySelectorAll(".copy-code-button").forEach((btn) =>
 			btn.remove(),
 		);
-		root.querySelectorAll("img").forEach(
-			(img) => (img.src = "/" + img.src.replace(REGEXES.app, "$1")),
-		);
+		root.querySelectorAll("img").forEach((img) => {
+			if (!img.src.startsWith("https://")) {
+				img.src = "/" + img.src.replace(REGEXES.app, "$1");
+			}
+		});
 		root.querySelectorAll("a.internal-link").forEach(
 			(link: HTMLAnchorElement) =>
 				(link.href = "/" + link.href.replace(REGEXES.app, "$1")),
