@@ -267,13 +267,18 @@ export default class Bridge extends Plugin {
 							const uuid = notes.secretIds.find(
 								(candidate) => candidate.name === file.name,
 							)?.uuid!;
-							const allowed = linkTreeArr
+							const forwardAllowed = linkTreeArr
 								.filter(
 									(entry) => entry.from.path === file.path,
 								)
 								.map((entry) => entry.for);
+							const backAllowed = linkTreeArr
+								.filter(
+									(entry) => entry.for.path === file.path,
+								)
+								.map((entry) => entry.from);
 
-							[file, ...allowed].map((file) => {
+							[file, ...forwardAllowed, ...backAllowed].map((file) => {
 								if (!access[uuid]) {
 									access[uuid] = [file.basename];
 								} else {
