@@ -213,7 +213,6 @@ export default class Bridge extends Plugin {
 					...linkTreeSecret,
 				]);
 				linkTreeSet.forEach((entry) => {
-					console.log(entry, notes.private);
 					if (
 						notes.private.contains(entry.for.path) ||
 						notes.private.contains(entry.from.path)
@@ -241,17 +240,16 @@ export default class Bridge extends Plugin {
 				
 				// recursively allow all mentioned notes for every UUID
 				const recursedCache: Record<string, TFile[]> = {}
-				function getRelated(note: TFile, path: TFile[] = []): TFile[] {
+				function getAllowedSecretNotes(note: TFile, path: TFile[] = []): TFile[] {
 					const isPublic = notes.pub.map(note => note.file).includes(note)
 					if (isPublic) {
-						const last = path.at(-1)
-						return last ? [last] : []
+						return []
 					}
 
 					if (path.includes(note)) {
-						return [note];
+						// no need to keep recursing as the path is already covered
+						return [];
 					}
-					console.log("Recursing", note.basename, path)
 
 					let related = recursedCache[note.path]
 
@@ -262,23 +260,19 @@ export default class Bridge extends Plugin {
 						const backward = linkTree
 							.filter((link) => link.for === note)
 							.map((link) => link.from);
-						const relatedSet = new Set([...forward, ...backward].filter(file => !path.includes(file)))
+						const relatedSet = new Set([...forward, ...backward])
 						related = Array.from(relatedSet)
 						recursedCache[note.path] = related
 					}
-					
-					if (related.length === 0) {
-						return [note];
-					}
-					const result = related.flatMap((file) =>
-						getRelated(file, [...path, note]),
+					const children = related.filter(file => !path.includes(file)).flatMap((file) =>
+						getAllowedSecretNotes(file, [...path, note]),
 					);
 
-					if (path.length === 0) {
-						return Array.from(new Set(result));
+					if (!children.length) {
+						return [note, ...related];
 					}
 
-					return result;
+					return Array.from(new Set(children));
 				}
 
 				let access: Record<string, string[]> = {};
@@ -313,7 +307,7 @@ export default class Bridge extends Plugin {
 								(candidate) => candidate.name === file.name,
 							)?.uuid!;
 
-							getRelated(file).map((file) => {
+							getAllowedSecretNotes(file, []).map((file) => {
 								if (!access[uuid]) {
 									access[uuid] = [file.basename];
 								} else {
@@ -793,7 +787,6 @@ export default class Bridge extends Plugin {
 
 function unixtimeCloseEnough(a: number, b: number) {
 	const deltaSec = Math.abs(b - a);
-	console.log(a, b, deltaSec);
 	return deltaSec < 15 * 60;
 }
 
