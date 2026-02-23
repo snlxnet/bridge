@@ -132,9 +132,7 @@ export default class Bridge extends Plugin {
 									| string
 									| undefined;
 								const body = await this.app.vault.read(file);
-								const tldr: string =
-									frontmatter["tldr"] ||
-									body.slice(0, 128) + "...";
+								const tldr: string = frontmatter["tldr"] || "Digital Garden Note";
 
 								frontmatter["name"] = file.name;
 
