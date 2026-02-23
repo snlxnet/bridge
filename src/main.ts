@@ -21,7 +21,7 @@ import beautify from "js-beautify";
 const REDIRECT_TEMPLATE = `<!doctype html>
 <html>
 	<head>
-		<title>TITLE</title>
+		<title>redirecting | snlx.net</title>
 		<meta charset="UTF-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -49,12 +49,13 @@ const REDIRECT_TEMPLATE = `<!doctype html>
 const HTML_TEMPLATE = `<!doctype html>
 <html>
 	<head>
-		<title>TITLE</title>
+		<title>TITLE | snlx.net</title>
 		<link rel="stylesheet" href="/new.css">
 		<meta charset="UTF-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta name="color-scheme" content="light dark">
+		<meta name="description" content="TLDR">
 	</head>
 	<body>
 		CONTENT
@@ -75,6 +76,9 @@ const REGEXES = {
 
 type FileWithMeta = {
 	file: TFile;
+	title: string;
+	tldr: string;
+	up?: string;
 	created: string;
 	updated: string;
 	body: string;
@@ -111,6 +115,8 @@ export default class Bridge extends Plugin {
 									(frontmatter["post"] as string) || "";
 								const uuid =
 									(frontmatter["uuid"] as string) || "";
+								const title: string = frontmatter["title"] || file.basename;
+								const up: string | undefined = frontmatter["up"]?.replace("[[", "").replace("]]", "");
 								const created =
 									(frontmatter["created"] as string) ||
 									"1970-01-01";
@@ -123,36 +129,28 @@ export default class Bridge extends Plugin {
 									| string
 									| undefined;
 								const body = await this.app.vault.read(file);
+								const tldr: string = frontmatter["tldr"] || (body.slice(0, 128) + "...");
 
 								frontmatter["name"] = file.name;
 
 								if (postTag.contains("snlx.net")) {
 									notes.pub.push({
 										file,
+										title,
+										tldr,
+										up,
 										created,
 										updated,
 										tags,
 										body,
 										redirect,
-									});
-								} else if (postTag) {
-									frontmatter["uuid"] = crypto.randomUUID();
-									delete frontmatter["post"];
-									notes.secret.push({
-										file,
-										created,
-										updated,
-										tags,
-										body,
-										redirect,
-									});
-									notes.secretIds.push({
-										name: file.name,
-										uuid: frontmatter["uuid"],
 									});
 								} else if (uuid) {
 									notes.secret.push({
 										file,
+										title,
+										tldr,
+										up,
 										created,
 										updated,
 										tags,
@@ -278,36 +276,25 @@ export default class Bridge extends Plugin {
 				let access: Record<string, string[]> = {};
 				let secretNotes = await Promise.all(
 					notes.secret.map(
-						async ({
-							file,
-							updated,
-							body,
-							created,
-							redirect,
-							tags,
-						}) => {
-							const html = redirect
-								? REDIRECT_TEMPLATE.replace("LINK", redirect)
+						async (note) => {
+							const html = note.redirect
+								? REDIRECT_TEMPLATE.replace("LINK", note.redirect)
 								: await this.toHTML(
 										{
-											file,
-											created,
-											updated,
-											tags,
-											body: body.replace(
+											...note,
+											body: note.body.replace(
 												REGEXES.wikiImage,
 												"![$1](https://api.snlx.net/file?id=$1)",
 											),
-											redirect,
 										},
 										linkTree,
 									);
 
 							const uuid = notes.secretIds.find(
-								(candidate) => candidate.name === file.name,
+								(candidate) => candidate.name === note.file.name,
 							)?.uuid!;
 
-							getAllowedSecretNotes(file, []).map((file) => {
+							getAllowedSecretNotes(note.file, []).map((file) => {
 								if (!access[uuid]) {
 									access[uuid] = [file.basename];
 								} else {
@@ -316,8 +303,8 @@ export default class Bridge extends Plugin {
 							});
 
 							return {
-								name: file.name,
-								updated,
+								name: note.file.name,
+								updated: note.updated,
 								body: html,
 								uuid,
 							};
@@ -545,8 +532,6 @@ export default class Bridge extends Plugin {
 		withInnerHTML: string,
 		linkTree: LinkTreeEntry[],
 	) {
-		const title = note.file.path.replace(/\/|\.md/g, "");
-
 		const root = document.createElement("body");
 		let backLinks = linkTree
 			.filter((entry) => entry.for.path === note.file.path)
@@ -563,13 +548,13 @@ export default class Bridge extends Plugin {
 		const links = document.createElement("ul");
 		nav.appendChild(links);
 		backLinks.map((note) => mkLink(note, "back"));
-		mkLink(title, "current");
+		mkLink(note.title, "current");
 		forwardLinks.map((note) => mkLink(note, "forward"));
 		const source = document.createElement("a");
 		source.classList.add("source");
 		source.innerHTML =
 			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-github-icon lucide-github"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>Source&nbsp;code';
-		source.href = "https://github.com/snlxnet/snlx.net";
+		source.href = "/src";
 		nav.appendChild(source);
 
 		function mkLink(note: string, className: string) {
@@ -608,6 +593,18 @@ export default class Bridge extends Plugin {
 			tag.textContent = "#" + text;
 			return tag;
 		});
+		const up = mkUp(note.up);
+		function mkUp(link?: string) {
+			if (!link) {
+				return ""
+			}
+			const element = document.createElement("a")
+			element.classList.add("tag", "up")
+			const icon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-left-up-icon lucide-corner-left-up"><path d="M14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/></svg>'
+			element.innerHTML = `${icon} ${link}`
+			element.href = "/" + link
+			return element
+		}
 		function mkDate(date: string, icon: string, label: string) {
 			const dateEl = document.createElement("span");
 			dateEl.dataset.date = date;
@@ -622,7 +619,7 @@ export default class Bridge extends Plugin {
 
 			return root;
 		}
-		meta.append(createdElement, updatedElement, ...tagElements);
+		meta.append(up, createdElement, updatedElement, ...tagElements);
 		main.prepend(meta);
 
 		root.querySelectorAll(".copy-code-button").forEach((btn) =>
@@ -644,7 +641,7 @@ export default class Bridge extends Plugin {
 		);
 		root.remove();
 		return beautify.html(
-			HTML_TEMPLATE.replace("TITLE", title).replace("CONTENT", html),
+			HTML_TEMPLATE.replace("TITLE", note.title).replace("TLDR", note.tldr).replace("CONTENT", html),
 		);
 	}
 
