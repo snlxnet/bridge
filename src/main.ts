@@ -115,8 +115,11 @@ export default class Bridge extends Plugin {
 									(frontmatter["post"] as string) || "";
 								const uuid =
 									(frontmatter["uuid"] as string) || "";
-								const title: string = frontmatter["title"] || file.basename;
-								const up: string | undefined = frontmatter["up"]?.replace("[[", "").replace("]]", "");
+								const title: string =
+									frontmatter["title"] || file.basename;
+								const up: string | undefined = frontmatter["up"]
+									?.replace("[[", "")
+									.replace("]]", "");
 								const created =
 									(frontmatter["created"] as string) ||
 									"1970-01-01";
@@ -129,7 +132,9 @@ export default class Bridge extends Plugin {
 									| string
 									| undefined;
 								const body = await this.app.vault.read(file);
-								const tldr: string = frontmatter["tldr"] || (body.slice(0, 128) + "...");
+								const tldr: string =
+									frontmatter["tldr"] ||
+									body.slice(0, 128) + "...";
 
 								frontmatter["name"] = file.name;
 
@@ -235,13 +240,18 @@ export default class Bridge extends Plugin {
 						};
 					}),
 				);
-				
+
 				// recursively allow all mentioned notes for every UUID
-				const recursedCache: Record<string, TFile[]> = {}
-				function getAllowedSecretNotes(note: TFile, path: TFile[] = []): TFile[] {
-					const isPublic = notes.pub.map(note => note.file).includes(note)
+				const recursedCache: Record<string, TFile[]> = {};
+				function getAllowedSecretNotes(
+					note: TFile,
+					path: TFile[] = [],
+				): TFile[] {
+					const isPublic = notes.pub
+						.map((note) => note.file)
+						.includes(note);
 					if (isPublic) {
-						return []
+						return [];
 					}
 
 					if (path.includes(note)) {
@@ -249,7 +259,7 @@ export default class Bridge extends Plugin {
 						return [];
 					}
 
-					let related = recursedCache[note.path]
+					let related = recursedCache[note.path];
 
 					if (!related || !related.length) {
 						const forward = linkTree
@@ -258,13 +268,15 @@ export default class Bridge extends Plugin {
 						const backward = linkTree
 							.filter((link) => link.for === note)
 							.map((link) => link.from);
-						const relatedSet = new Set([...forward, ...backward])
-						related = Array.from(relatedSet)
-						recursedCache[note.path] = related
+						const relatedSet = new Set([...forward, ...backward]);
+						related = Array.from(relatedSet);
+						recursedCache[note.path] = related;
 					}
-					const children = related.filter(file => !path.includes(file)).flatMap((file) =>
-						getAllowedSecretNotes(file, [...path, note]),
-					);
+					const children = related
+						.filter((file) => !path.includes(file))
+						.flatMap((file) =>
+							getAllowedSecretNotes(file, [...path, note]),
+						);
 
 					if (!children.length) {
 						return [note, ...related];
@@ -275,41 +287,39 @@ export default class Bridge extends Plugin {
 
 				let access: Record<string, string[]> = {};
 				let secretNotes = await Promise.all(
-					notes.secret.map(
-						async (note) => {
-							const html = note.redirect
-								? REDIRECT_TEMPLATE.replace("LINK", note.redirect)
-								: await this.toHTML(
-										{
-											...note,
-											body: note.body.replace(
-												REGEXES.wikiImage,
-												"![$1](https://api.snlx.net/file?id=$1)",
-											),
-										},
-										linkTree,
-									);
+					notes.secret.map(async (note) => {
+						const html = note.redirect
+							? REDIRECT_TEMPLATE.replace("LINK", note.redirect)
+							: await this.toHTML(
+									{
+										...note,
+										body: note.body.replace(
+											REGEXES.wikiImage,
+											"![$1](https://api.snlx.net/file?id=$1)",
+										),
+									},
+									linkTree,
+								);
 
-							const uuid = notes.secretIds.find(
-								(candidate) => candidate.name === note.file.name,
-							)?.uuid!;
+						const uuid = notes.secretIds.find(
+							(candidate) => candidate.name === note.file.name,
+						)?.uuid!;
 
-							getAllowedSecretNotes(note.file, []).map((file) => {
-								if (!access[uuid]) {
-									access[uuid] = [file.basename];
-								} else {
-									access[uuid].push(file.basename);
-								}
-							});
+						getAllowedSecretNotes(note.file, []).map((file) => {
+							if (!access[uuid]) {
+								access[uuid] = [file.basename];
+							} else {
+								access[uuid].push(file.basename);
+							}
+						});
 
-							return {
-								name: note.file.name,
-								updated: note.updated,
-								body: html,
-								uuid,
-							};
-						},
-					),
+						return {
+							name: note.file.name,
+							updated: note.updated,
+							body: html,
+							uuid,
+						};
+					}),
 				);
 
 				secretNotes = secretNotes.filter((note) => {
@@ -596,14 +606,15 @@ export default class Bridge extends Plugin {
 		const up = mkUp(note.up);
 		function mkUp(link?: string) {
 			if (!link) {
-				return ""
+				return "";
 			}
-			const element = document.createElement("a")
-			element.classList.add("tag", "up")
-			const icon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-left-up-icon lucide-corner-left-up"><path d="M14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/></svg>'
-			element.innerHTML = `${icon} ${link}`
-			element.href = "/" + link
-			return element
+			const element = document.createElement("a");
+			element.classList.add("tag", "up");
+			const icon =
+				'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-left-up-icon lucide-corner-left-up"><path d="M14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/></svg>';
+			element.innerHTML = `${icon} ${link}`;
+			element.href = "/" + link;
+			return element;
 		}
 		function mkDate(date: string, icon: string, label: string) {
 			const dateEl = document.createElement("span");
@@ -641,7 +652,9 @@ export default class Bridge extends Plugin {
 		);
 		root.remove();
 		return beautify.html(
-			HTML_TEMPLATE.replace("TITLE", note.title).replace("TLDR", note.tldr).replace("CONTENT", html),
+			HTML_TEMPLATE.replace("TITLE", note.title)
+				.replace("TLDR", note.tldr)
+				.replace("CONTENT", html),
 		);
 	}
 
