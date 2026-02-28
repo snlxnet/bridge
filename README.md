@@ -5,4 +5,4 @@
 I built this project for myself, it's wouldn't be useful for anyone else as-is,
 though forking or reading its sources may be.
 
-See https://snlx.net/mk-bridge
+See https://snlx.net/winterwi
