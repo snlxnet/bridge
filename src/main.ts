@@ -563,7 +563,7 @@ export default class Bridge extends Plugin {
 		const links = document.createElement("ul");
 		nav.appendChild(links);
 		backLinks.map((note) => mkLink(note, "back"));
-		mkLink(note.title, "current");
+		mkLink(note.file.basename, "current");
 		forwardLinks.map((note) => mkLink(note, "forward"));
 		const source = document.createElement("a");
 		source.classList.add("source");
