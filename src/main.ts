@@ -454,6 +454,13 @@ export default class Bridge extends Plugin {
 				new StatusModal(this.app, this.settings.apiKey).open();
 			},
 		});
+		this.addCommand({
+			id: "clear-status",
+			name: "Clear Status",
+			callback: () => {
+				this.clearStatus()
+			},
+		});
 
 		this.addCommand({
 			id: "upgrade-server",
@@ -790,6 +797,14 @@ export default class Bridge extends Plugin {
 		);
 		const body = await response.text();
 		new Notice(`Server responded with ${body}`);
+	}
+
+	clearStatus() {
+		const url = `https://api.snlx.net/status?pass=${this.settings.apiKey}&duration=%2B0`
+
+		fetch(url, {method: "POST"}).then(() => {
+			new Notice("status cleared");
+		})
 	}
 }
 
