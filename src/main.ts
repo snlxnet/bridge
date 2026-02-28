@@ -854,7 +854,7 @@ class StatusModal extends Modal {
 			.addText((text) =>
 				text
 					.setValue(this.duration || "")
-					.onChange((val) => (this.location = val)),
+					.onChange((val) => (this.duration = val)),
 			);
 
 		new Setting(contentEl).addButton((button) =>
@@ -875,19 +875,21 @@ class StatusModal extends Modal {
 
 	onSubmit() {
 		const url =
-			`/status?pass=${this.apiKey}` +
+			`https://api.snlx.net/status?pass=${this.apiKey}` +
 			this.addParam("action", this.action) +
 			this.addParam("link", this.link) +
 			this.addParam("location", this.location) +
 			this.addParam("duration", this.duration);
-		new Notice(url);
+
+		fetch(url, {method: "POST"})
+		new Notice("status sent");
 	}
 
 	private addParam(name: string, value: string | undefined) {
 		if (!value) {
 			return "";
 		} else {
-			return "&" + name + "=" + value;
+			return "&" + name + "=" + encodeURIComponent(value);
 		}
 	}
 }
